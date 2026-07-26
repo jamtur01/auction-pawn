@@ -12,10 +12,10 @@ addon.RESULT_ROW_WIDTH = 420
 addon.RESULT_NAME_WIDTH = 150
 addon.RESULT_DELTA_OFFSET = 165
 addon.RESULT_PRICE_OFFSET = 220
-addon.RESULT_BID_OFFSET = 330
-addon.RESULT_BUYOUT_OFFSET = 375
+addon.RESULT_BID_OFFSET = 315
+addon.RESULT_BUYOUT_OFFSET = 369
 addon.RESULTS_VISIBLE_ROWS = 4
-addon.RESULT_ROW_HEIGHT = 22
+addon.RESULT_ROW_HEIGHT = 37
 addon.OPTION_FILTER_ROWS = 6
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
 addon.SLOT_FILTER_ROWS = 8
@@ -1237,15 +1237,23 @@ function addon:CreateResults(parent)
   local previous
   for index = 1, self.RESULTS_VISIBLE_ROWS do
     local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
-    row:SetSize(self.RESULT_ROW_WIDTH, 20)
+    row:SetSize(self.RESULT_ROW_WIDTH, self.RESULT_ROW_HEIGHT)
     if previous then
-      row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
+      row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, 0)
     else
       row:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
     end
     row:RegisterForClicks("LeftButtonUp")
     row:SetScript("OnClick", function(button)
       addon:SelectResult(button.resultIndex)
+    end)
+    row:SetScript("OnEnter", function(button)
+      addon:ShowResultTooltip(button.resultIndex, button)
+    end)
+    row:SetScript("OnLeave", function()
+      if GameTooltip then
+        GameTooltip:Hide()
+      end
     end)
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -1260,23 +1268,45 @@ function addon:CreateResults(parent)
     row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
     row.priceText:SetWidth(105)
     row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.bidButton:SetSize(34, 18)
-    row.bidButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_OFFSET, 0)
-    row.bidButton:SetText("Bid")
-    row.bidButton:SetScript("OnClick", function(button)
-      addon:PlaceResultBid(button.resultIndex, false)
-    end)
+    row.bidButton:Hide()
     row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.buyoutButton:SetSize(40, 18)
-    row.buyoutButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_OFFSET, 0)
-    row.buyoutButton:SetText("Buy")
-    row.buyoutButton:SetScript("OnClick", function(button)
-      addon:PlaceResultBid(button.resultIndex, true)
-    end)
+    row.buyoutButton:Hide()
     row:Hide()
     rows[index] = row
     previous = row
   end
+
+  local bidAction = CreateFrame(
+    "Button",
+    "PawnAuctionSearchBidActionButton",
+    parent,
+    "UIPanelButtonTemplate"
+  )
+  bidAction:SetSize(48, 20)
+  bidAction:SetPoint("TOPLEFT", scrollFrame, "BOTTOMLEFT", self.RESULT_BID_OFFSET, -6)
+  bidAction:SetText("Bid")
+  bidAction:SetScript("OnClick", function()
+    addon:PlaceResultBid(addon:GetActionResultIndex(), false)
+  end)
+  bidAction:Hide()
+  parent.bidButton = bidAction
+  self.bidButton = bidAction
+
+  local buyoutAction = CreateFrame(
+    "Button",
+    "PawnAuctionSearchBuyoutActionButton",
+    parent,
+    "UIPanelButtonTemplate"
+  )
+  buyoutAction:SetSize(48, 20)
+  buyoutAction:SetPoint("LEFT", bidAction, "RIGHT", 6, 0)
+  buyoutAction:SetText("Buy")
+  buyoutAction:SetScript("OnClick", function()
+    addon:PlaceResultBid(addon:GetActionResultIndex(), true)
+  end)
+  buyoutAction:Hide()
+  parent.buyoutButton = buyoutAction
+  self.buyoutButton = buyoutAction
   return rows
 end
 
@@ -1285,6 +1315,25 @@ function addon:SetStatus(message)
   if self.statusText then
     self.statusText:SetText(message)
   end
+end
+
+function addon:ShowResultTooltip(resultIndex, owner)
+  local result = self.results and self.results[resultIndex]
+  if not result or not result.link or not GameTooltip then
+    return
+  end
+  GameTooltip:SetOwner(owner or UIParent, "ANCHOR_RIGHT")
+  GameTooltip:ClearLines()
+  GameTooltip:SetHyperlink(result.link)
+  GameTooltip:Show()
+end
+
+function addon:GetActionResultIndex()
+  if self.selectedResultIndex and self.results and self.results[self.selectedResultIndex] then
+    return self.selectedResultIndex
+  end
+  self:SetStatus("Select a result before bidding or buying.")
+  return nil
 end
 
 local function copyAuctionRow(row)
@@ -1569,17 +1618,19 @@ function addon:ProcessFastScanBatch()
 end
 
 
-function addon:QueryAuctionPage(page, status)
+function addon:QueryAuctionPage(page, status, searchName)
   if not CanSendAuctionQuery("list") then
     self.waitingForQuery = true
     self.waitingPage = page
+    self.waitingSearchName = searchName
     self:SetStatus("Auction query is throttled. Waiting to retry...")
     return false
   end
   self.waitingForQuery = false
   self.waitingPage = nil
+  self.waitingSearchName = nil
   self.currentQueryPage = page
-  QueryAuctionItems("", "", "", nil, nil, nil, page, false, -1)
+  QueryAuctionItems(searchName or "", "", "", nil, nil, nil, page, false, -1)
   if status then
     self:SetStatus(status)
   end
@@ -1613,7 +1664,9 @@ function addon:OnUpdate(elapsed)
     return
   end
   if self.pendingSelection then
-    self:QueryAuctionPage(self.pendingSelection.page, "Loading selected result page...")
+    local result = self.pendingSelection
+    local searchName = result.searchName or result.auctionName or result.name or ""
+    self:QueryAuctionPage(result.page or 0, "Loading selected result page...", searchName)
   elseif self.scanActive then
     self:QueryScanPage()
   end
@@ -1644,6 +1697,7 @@ function addon:StartScan()
   end
   self.results = {}
   self:ResetResultScroll()
+  self.selectedResultIndex = nil
   self.scanActive = true
   self.fastScanActive = false
   self.scanPage = 0
@@ -1735,6 +1789,9 @@ function addon:UpdateResults()
       self.RESULT_ROW_HEIGHT
     )
   end
+  if self.selectedResultIndex and not results[self.selectedResultIndex] then
+    self.selectedResultIndex = nil
+  end
 
   local offset = 0
   if self.resultScrollFrame and FauxScrollFrame_GetOffset then
@@ -1751,13 +1808,8 @@ function addon:UpdateResults()
       row.nameText:SetText(result.link or result.name or "")
       row.deltaText:SetText(formatScore(result.score))
       row.priceText:SetText(formatResultPrices(self, result))
-      if result.source == "auctioneer" then
-        row.bidButton:Hide()
-        row.buyoutButton:Hide()
-      else
-        row.bidButton:Show()
-        row.buyoutButton:Show()
-      end
+      row.bidButton:Hide()
+      row.buyoutButton:Hide()
       row:Show()
     else
       row.resultIndex = nil
@@ -1771,15 +1823,24 @@ function addon:UpdateResults()
       row:Hide()
     end
   end
+  if self.bidButton and self.buyoutButton then
+    if self.selectedResultIndex and results[self.selectedResultIndex] then
+      self.bidButton:Show()
+      self.buyoutButton:Show()
+    else
+      self.bidButton:Hide()
+      self.buyoutButton:Hide()
+    end
+  end
 end
 
 function addon:FindCurrentBrowseIndex(result)
-  if GetAuctionItemLink("list", result.index) == result.link then
+  if result.index and self:CurrentAuctionMatchesResult(result.index, result) then
     return result.index
   end
   local count = GetNumAuctionItems("list") or 0
   for index = 1, count do
-    if GetAuctionItemLink("list", index) == result.link then
+    if self:CurrentAuctionMatchesResult(index, result) then
       return index
     end
   end
@@ -1793,6 +1854,17 @@ function addon:SelectCurrentBrowseResult(result)
   end
   SetSelectedAuctionItem("list", index)
   return true
+end
+
+function addon:LoadLiveResult(result, message)
+  local page = result.page or 0
+  local searchName
+  if result.source == "auctioneer" or result.page == nil then
+    searchName = result.auctionName or result.name or ""
+  end
+  result.searchName = searchName
+  self.pendingSelection = result
+  self:QueryAuctionPage(page, message, searchName)
 end
 
 function addon:GetCurrentAuctionBid(index)
@@ -1820,17 +1892,25 @@ function addon:PlaceResultBid(resultIndex, buyout)
   if not result then
     return
   end
-  if result.source == "auctioneer" or result.page == nil or result.index == nil then
-    self:SetStatus("Auctioneer scan result is display-only. Run a live scan before bidding.")
-    return
+  local index
+  if result.source == "auctioneer" then
+    index = self:FindCurrentBrowseIndex(result)
+    if not index then
+      self:LoadLiveResult(result, "Loading live auction. Click Bid or Buy again after it loads.")
+      return
+    end
+  else
+    if result.page == nil or result.index == nil then
+      self:SetStatus("Auction result has no live row. Search again before bidding.")
+      return
+    end
+    if result.page ~= self.currentAuctionPage then
+      self:LoadLiveResult(result, "Loading result page. Click Bid or Buy again after it loads.")
+      return
+    end
+    index = result.index
   end
-  if result.page ~= self.currentAuctionPage then
-    self.pendingSelection = result
-    local message = "Loading result page. Click Bid or Buy again after it loads."
-    self:QueryAuctionPage(result.page, message)
-    return
-  end
-  local index = result.index
+  index = index or result.index
   if not self:CurrentAuctionMatchesResult(index, result) then
     self:SetStatus("Auction result changed. Search again before bidding.")
     return
@@ -1872,15 +1952,23 @@ function addon:SelectResult(resultIndex)
   if not result then
     return
   end
-  if result.source == "auctioneer" or result.page == nil or result.index == nil then
-    self:SetStatus("Auctioneer scan result is display-only. Use Auctioneer for purchase actions.")
+  self.selectedResultIndex = resultIndex
+  self:UpdateResults()
+  if result.source == "auctioneer" then
+    if self:SelectCurrentBrowseResult(result) then
+      return
+    end
+    self:LoadLiveResult(result, "Loading live auction for selection...")
+    return
+  end
+  if result.page == nil or result.index == nil then
+    self:SetStatus("Auction result has no live row. Search again before selecting it.")
     return
   end
   if result.page == self.currentAuctionPage and self:SelectCurrentBrowseResult(result) then
     return
   end
-  self.pendingSelection = result
-  self:QueryAuctionPage(result.page, "Loading selected result page...")
+  self:LoadLiveResult(result, "Loading selected result page...")
 end
 
 addon:OnLoad()

@@ -688,6 +688,7 @@ function mock.reset()
   AuctionFrameTab1:SetText("Browse")
   AuctionFrameTab2:SetText("Bids")
   AuctionFrameTab3:SetText("Auctions")
+  GameTooltip = mock.create_frame("GameTooltip", "GameTooltip", UIParent)
   DEFAULT_CHAT_FRAME = mock.create_frame("Frame", "DEFAULT_CHAT_FRAME", UIParent)
   DEFAULT_CHAT_FRAME.AddMessage = DEFAULT_CHAT_FRAME_AddMessage
 end

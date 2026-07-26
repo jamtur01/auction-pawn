@@ -222,18 +222,18 @@ assert_truthy(
 )
 assert_truthy(
   PawnAuctionSearch.RESULT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].priceText.width
-    <= PawnAuctionSearch.RESULT_BID_OFFSET,
-  "price column ends before Bid button"
-)
-assert_truthy(
-  PawnAuctionSearch.RESULT_BID_OFFSET + PawnAuctionSearch.resultRows[1].bidButton.width
-    <= PawnAuctionSearch.RESULT_BUYOUT_OFFSET,
-  "Bid button ends before Buy button"
-)
-assert_truthy(
-  PawnAuctionSearch.RESULT_BUYOUT_OFFSET + PawnAuctionSearch.resultRows[1].buyoutButton.width
     <= PawnAuctionSearch.RESULT_ROW_WIDTH,
-  "Buy button stays inside result row"
+  "price column stays inside result row"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_BID_OFFSET + PawnAuctionSearch.bidButton.width
+    <= PawnAuctionSearch.RESULT_BUYOUT_OFFSET,
+  "Bid action ends before Buy action"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_BUYOUT_OFFSET + PawnAuctionSearch.buyoutButton.width
+    <= PawnAuctionSearch.RESULT_ROW_WIDTH,
+  "Buy action stays inside result pane"
 )
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
@@ -290,9 +290,15 @@ assert_equals(
   "Bid 1g 0s 0c / Buy 2g 0s 0c",
   "bid and buyout prices shown"
 )
-PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
-assert_equals(mock.placedBid.index, 1, "bid button uses selected row")
-assert_equals(mock.placedBid.bid, 10000, "bid button uses bid price")
+assert_equals(PawnAuctionSearch.bidButton.shown, false, "action buttons hidden before selection")
+PawnAuctionSearch.resultRows[1].scripts.OnEnter(PawnAuctionSearch.resultRows[1])
+assert_equals(GameTooltip.hyperlink, results[1].link, "result hover shows item tooltip")
+PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
+PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
+assert_equals(PawnAuctionSearch.bidButton.shown, true, "selected row shows action buttons")
+PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
+assert_equals(mock.placedBid.index, 1, "bid action uses selected row")
+assert_equals(mock.placedBid.bid, 10000, "bid action uses bid price")
 mock.placedBid = nil
 results[1].buyoutPrice = 0
 mock.auctions[1].buyoutPrice = 0
@@ -302,23 +308,17 @@ assert_equals(
   "Bid 1g 0s 0c / No buyout",
   "missing buyout shown explicitly"
 )
-PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
-  PawnAuctionSearch.resultRows[1].buyoutButton
-)
+PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid, nil, "missing buyout does not spend")
 mock.auctions[1].buyoutPrice = 20000
 results[1].buyoutPrice = 20000
 PawnAuctionSearch:UpdateResults()
 mock.placedBid = nil
-PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
-  PawnAuctionSearch.resultRows[1].buyoutButton
-)
+PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid.bid, 20000, "buyout button uses buyout price")
 mock.placedBid = nil
 mock.auctions[1].buyoutPrice = 30000
-PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
-  PawnAuctionSearch.resultRows[1].buyoutButton
-)
+PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid, nil, "changed auction row blocks buyout")
 mock.auctions[1].buyoutPrice = 20000
 PawnAuctionSearchDB.canUse = true
@@ -495,13 +495,14 @@ _G.selectedAuction = nil
 mock.placedBid = nil
 mock.lastAuctionQuery = nil
 PawnAuctionSearch.currentAuctionPage = 0
-PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
+PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
+PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
 assert_equals(mock.lastAuctionQuery[7], 1, "fast scan bid loads result page")
 assert_equals(mock.placedBid, nil, "fast scan bid waits for explicit second click")
 fire_auction_update(PawnAuctionSearch)
 assert_equals(_G.selectedAuction, 1, "fast scan bid page load selects auction")
 assert_equals(mock.placedBid, nil, "fast scan page load does not bid")
-PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
+PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
 assert_equals(mock.placedBid.index, 1, "fast scan bid second click uses page-local index")
 assert_equals(mock.placedBid.bid, 10000, "fast scan bid second click spends bid price")
 
@@ -658,24 +659,40 @@ assert_equals(
   "Found 1 upgrade auctions from Auctioneer scan data (2 auctions rescored).",
   "Auctioneer scan status shows source"
 )
+assert_equals(PawnAuctionSearch.bidButton.shown, false, "Auctioneer action hidden before selection")
+PawnAuctionSearch.resultRows[1].scripts.OnEnter(PawnAuctionSearch.resultRows[1])
 assert_equals(
-  PawnAuctionSearch.resultRows[1].bidButton.shown,
-  false,
-  "Auctioneer cached result hides bid"
+  GameTooltip.hyperlink,
+  get_results(PawnAuctionSearch)[1].link,
+  "Auctioneer row hover tooltip"
 )
-assert_equals(
-  PawnAuctionSearch.resultRows[1].buyoutButton.shown,
-  false,
-  "Auctioneer cached result hides buyout"
-)
+mock.auctions[1] = {
+  name = "Upgrade Sword",
+  itemId = 1001,
+  link = get_results(PawnAuctionSearch)[1].link,
+  quality = 2,
+  level = 80,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+  owner = "AuctioneerSeller",
+  timeLeft = 2,
+}
 PawnAuctionSearch.pendingSelection = nil
+mock.lastAuctionQuery = nil
 PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
-assert_equals(PawnAuctionSearch.pendingSelection, nil, "Auctioneer row click does not page query")
+assert_equals(mock.lastAuctionQuery[1], "Upgrade Sword", "Auctioneer row queries live item name")
 assert_equals(
-  PawnAuctionSearch.statusText.text,
-  "Auctioneer scan result is display-only. Use Auctioneer for purchase actions.",
-  "Auctioneer row click status"
+  PawnAuctionSearch.pendingSelection,
+  get_results(PawnAuctionSearch)[1],
+  "Auctioneer row waits for live match"
 )
+fire_auction_update(PawnAuctionSearch)
+assert_equals(_G.selectedAuction, 1, "Auctioneer live query selects exact auction")
+mock.placedBid = nil
+PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
+assert_equals(mock.placedBid.bid, 20000, "Auctioneer buyout uses verified live row")
 auctioneerIsScanning = true
 start_scan(PawnAuctionSearch)
 assert_equals(
