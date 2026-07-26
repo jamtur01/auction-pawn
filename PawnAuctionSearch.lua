@@ -5,21 +5,21 @@ addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
-addon.SLOT_FILTER_COLUMN_WIDTH = 92
+addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 0
-addon.RESULTS_TOP_OFFSET = -190
-addon.RESULT_ROW_WIDTH = 680
-addon.RESULT_NAME_WIDTH = 200
-addon.RESULT_DELTA_OFFSET = 215
-addon.RESULT_PRICE_OFFSET = 280
-addon.RESULT_BID_OFFSET = 530
-addon.RESULT_BUYOUT_OFFSET = 585
-addon.RESULTS_VISIBLE_ROWS = 12
+addon.RESULTS_TOP_OFFSET = -240
+addon.RESULT_ROW_WIDTH = 660
+addon.RESULT_NAME_WIDTH = 270
+addon.RESULT_DELTA_OFFSET = 310
+addon.RESULT_PRICE_OFFSET = 390
+addon.RESULT_BID_OFFSET = 535
+addon.RESULT_BUYOUT_OFFSET = 590
+addon.RESULTS_VISIBLE_ROWS = 5
 addon.RESULT_ROW_HEIGHT = 22
-addon.OPTION_FILTER_ROWS = 3
+addon.OPTION_FILTER_ROWS = 6
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
-addon.SLOT_FILTER_ROWS = 5
-addon.SLOT_FILTERS_LEFT_OFFSET = 360
+addon.SLOT_FILTER_ROWS = 8
+addon.SLOT_FILTERS_LEFT_OFFSET = 280
 addon.FAST_SCAN_ROWS_PER_TICK = 250
 addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
@@ -1068,20 +1068,20 @@ function addon:CreateOptionControls(parent, anchor)
     { key = "useBuyout", label = "Use buyout" },
     { key = "bestPrice", label = "Adjust score based on price" },
     { key = "unenchanted", label = "Use unenchanted values" },
-    { key = "force2h", label = "Only 2H Weapons" },
   }
   for index, option in ipairs(options) do
     addOptionCheckButton(self, parent, option.key, option.label, index, title)
   end
-  local armorAnchor = parent.optionControls[3] or title
+  local armorAnchor = parent.optionControls[#parent.optionControls] or title
   parent.optionsBottom = self:CreateArmorPreferenceSelector(parent, armorAnchor)
   self.optionControls = parent.optionControls
   return parent.optionControls
 end
 
-local function addSlotFilterCheckButton(addon, parent, filter, index, title)
-  local column = math.floor((index - 1) / addon.SLOT_FILTER_ROWS)
-  local row = (index - 1) % addon.SLOT_FILTER_ROWS
+local function addSlotFilterCheckButton(addon, parent, filter, index, title, visualIndex)
+  visualIndex = visualIndex or index
+  local column = math.floor((visualIndex - 1) / addon.SLOT_FILTER_ROWS)
+  local row = (visualIndex - 1) % addon.SLOT_FILTER_ROWS
   local check = CreateFrame(
     "CheckButton",
     "PawnAuctionSearchSlotFilter" .. index,
@@ -1106,6 +1106,35 @@ local function addSlotFilterCheckButton(addon, parent, filter, index, title)
   parent.slotControls[index] = check
 end
 
+local function addForceTwoHandCheckButton(addon, parent, title, visualIndex)
+  visualIndex = visualIndex or 14
+  local column = math.floor((visualIndex - 1) / addon.SLOT_FILTER_ROWS)
+  local row = (visualIndex - 1) % addon.SLOT_FILTER_ROWS
+  local check = CreateFrame(
+    "CheckButton",
+    "PawnAuctionSearchForceTwoHandOption",
+    parent,
+    "UICheckButtonTemplate"
+  )
+  check:SetSize(20, 20)
+  check:SetPoint(
+    "TOPLEFT",
+    title,
+    "BOTTOMLEFT",
+    column * addon.SLOT_FILTER_COLUMN_WIDTH,
+    -4 - (row * 20)
+  )
+  check:SetChecked(addon.db and addon.db.force2h)
+  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
+  check.labelText:SetText("Only 2H Weapons")
+  check:SetScript("OnClick", function(button)
+    addon:SetOption("force2h", button:GetChecked())
+  end)
+  parent.forceTwoHandControl = check
+  addon.forceTwoHandControl = check
+end
+
 function addon:CreateSlotFilters(parent)
   if parent.slotControls then
     return parent.slotControls
@@ -1119,8 +1148,13 @@ function addon:CreateSlotFilters(parent)
   title:SetText("Slots")
   parent.slotControls = {}
   for index, filter in ipairs(self.slotFilters) do
-    addSlotFilterCheckButton(self, parent, filter, index, title)
+    local visualIndex = index
+    if index > 13 then
+      visualIndex = index + 1
+    end
+    addSlotFilterCheckButton(self, parent, filter, index, title, visualIndex)
   end
+  addForceTwoHandCheckButton(self, parent, title, 14)
   self.slotControls = parent.slotControls
   return parent.slotControls
 end
@@ -1137,14 +1171,15 @@ function addon:CreateMainFrame()
   self:CreateScaleSelector(frame)
 
   local status = frame:CreateFontString("PawnAuctionSearchStatusText", "ARTWORK", "GameFontNormal")
-  status:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -8)
+  status:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -4)
+  status:SetWidth(250)
   status:SetText("Choose a Pawn scale, then search.")
   frame.statusText = status
   self.statusText = status
 
   local button = CreateFrame("Button", "PawnAuctionSearchButton", frame, "UIPanelButtonTemplate")
   button:SetSize(96, 22)
-  button:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -10)
+  button:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -28)
   button:SetText("Search")
   button:SetScript("OnClick", function()
     addon:StartScan()

@@ -154,10 +154,17 @@ assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden o
 
 
 local scales = discover_scales(PawnAuctionSearch)
-assert_equals(#PawnAuctionSearch.optionControls, 6, "option control count")
+assert_equals(#PawnAuctionSearch.optionControls, 5, "option control count")
 assert_equals(#PawnAuctionSearch.slotFilters, 15, "equipment slot filter count")
 assert_equals(has_slot_control(PawnAuctionSearch, "Shirt"), false, "shirt slot hidden")
 assert_equals(has_slot_control(PawnAuctionSearch, "Tabard"), false, "tabard slot hidden")
+assert_truthy(PawnAuctionSearch.forceTwoHandControl, "force 2H slot-column control exists")
+PawnAuctionSearch.forceTwoHandControl:SetChecked(true)
+PawnAuctionSearch.forceTwoHandControl.scripts.OnClick(PawnAuctionSearch.forceTwoHandControl)
+assert_equals(PawnAuctionSearchDB.force2h, true, "force 2H control persists")
+PawnAuctionSearch.forceTwoHandControl:SetChecked(false)
+PawnAuctionSearch.forceTwoHandControl.scripts.OnClick(PawnAuctionSearch.forceTwoHandControl)
+assert_equals(PawnAuctionSearchDB.force2h, false, "force 2H control clears")
 assert_equals(PawnAuctionSearchDB.useBuyout, false, "use buyout defaults off")
 local buyoutControl = find_option_control(PawnAuctionSearch, "Use buyout")
 buyoutControl:SetChecked(true)
