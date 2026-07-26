@@ -604,10 +604,12 @@ end
 
 function addon:EnsureScaleSelected()
   self.db = self:EnsureDatabase()
-  if type(self.db.scaleName) == "string" and self.db.scaleName ~= ""
-    and PawnDoesScaleExist(self.db.scaleName) then
-    self:SetScale(self.db.scaleName)
-    return true
+  if type(self.db.scaleName) == "string" and self.db.scaleName ~= "" then
+    local valid = self:ValidateScale(self.db.scaleName)
+    if valid then
+      self:SetScale(self.db.scaleName)
+      return true
+    end
   end
   local scales = self:GetScales()
   if not scales[1] then

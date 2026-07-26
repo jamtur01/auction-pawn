@@ -501,6 +501,9 @@ function GetInventorySlotInfo(slotName)
   if slotName == "ChestSlot" then
     return 5, nil
   end
+  if slotName == "FeetSlot" then
+    return 8, nil
+  end
   return 0, nil
 end
 

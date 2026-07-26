@@ -259,6 +259,44 @@ UIDropDownMenu_Initialize(
   PawnAuctionSearch.scaleDropDown.initialize
 )
 assert_equals(mock.dropdownButtons[1].info.value, "TestScale", "scale page resets after shrink")
+local autoGearUpdateCount = 0
+function AutoGearReadItemInfo(inventoryID, lootRollID, container, slot, questRewardIndex, link)
+  return {
+    link = link,
+    shouldShowScoreInTooltip = true,
+    validGearSlots = { GetInventorySlotInfo("FeetSlot") },
+    numValidGearSlots = 1,
+  }
+end
+function AutoGearDetermineItemScore(info)
+  if info.link and string.find(info.link, "item:1006", 1, true) then
+    return 45
+  end
+  return 0
+end
+function AutoGearGetBestSetItems(info)
+  return {}, 0
+end
+function AutoGearGetTooltipScoreComparisonInfo(info, equipped)
+  return nil, 36, GetInventorySlotInfo("FeetSlot"), 36
+end
+function AutoGearUpdateEquippedItems()
+  autoGearUpdateCount = autoGearUpdateCount + 1
+end
+UIDropDownMenu_Initialize(
+  PawnAuctionSearch.scaleDropDown,
+  PawnAuctionSearch.scaleDropDown.initialize
+)
+assert_equals(
+  mock.dropdownButtons[2].info.value,
+  PawnAuctionSearch.AUTO_GEAR_SCALE_NAME,
+  "AutoGear source appears after Pawn scales"
+)
+PawnAuctionSearch:SetScale(PawnAuctionSearch.AUTO_GEAR_SCALE_NAME)
+assert_equals(PawnAuctionSearchDB.scaleName, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME, "AutoGear source selected")
+PawnAuctionSearch:PrepareScoringSource(PawnAuctionSearch.AUTO_GEAR_SCALE_NAME)
+assert_equals(autoGearUpdateCount, 1, "AutoGear equipped scores refresh before scoring")
+PawnAuctionSearch:SetScale("TestScale")
 assert_equals(
   PawnAuctionSearch:GetDisplayScaleLabel("Rogue: assassination"),
   "Rogue: assass.",
@@ -496,6 +534,40 @@ assert_equals(
   "No buyout",
   "missing buyout shown explicitly"
 )
+local autoGearBootsRow = {
+  link = "|cff1eff00|Hitem:1006:0:0:0:0:0:0:0|h[Hunting Boots]|h|r",
+  equipLoc = "INVTYPE_FEET",
+  itemType = "Armor",
+  itemSubType = "Leather",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+local autoGearBootsResult = PawnAuctionSearch:ScoreAuction(
+  autoGearBootsRow,
+  PawnAuctionSearch.AUTO_GEAR_SCALE_NAME
+)
+assert_truthy(autoGearBootsResult, "AutoGear source keeps usable better boots")
+assert_equals(autoGearBootsResult.delta, 9, "AutoGear source compares against equipped score")
+local oldAutoGearScore = AutoGearDetermineItemScore
+function AutoGearDetermineItemScore(info)
+  return 36
+end
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearBootsRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source excludes equal-score boots"
+)
+AutoGearDetermineItemScore = oldAutoGearScore
+PawnAuctionSearchDB.slots.FeetSlot = false
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearBootsRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source respects disabled slot filters"
+)
+PawnAuctionSearchDB.slots.FeetSlot = true
 mock.staticPopupName = nil
 PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid, nil, "missing buyout does not spend")
