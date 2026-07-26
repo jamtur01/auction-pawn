@@ -216,11 +216,12 @@ function Frame:SetParent(parent)
   self.parent = parent
 end
 
-function mock.create_frame(frameType, name, parent)
+function mock.create_frame(frameType, name, parent, template)
   local frame = setmetatable({
     type = frameType,
     name = name,
     parent = parent,
+    template = template,
     scripts = {},
     events = {},
     shown = true,
@@ -232,12 +233,18 @@ function mock.create_frame(frameType, name, parent)
   table.insert(mock.frames, frame)
   if name then
     _G[name] = frame
+    if template == "AuctionTabTemplate" then
+      _G[name .. "Left"] = mock.create_frame("Texture", name .. "Left", frame)
+      _G[name .. "Middle"] = mock.create_frame("Texture", name .. "Middle", frame)
+      _G[name .. "Right"] = mock.create_frame("Texture", name .. "Right", frame)
+      _G[name .. "Text"] = mock.create_frame("FontString", name .. "Text", frame)
+    end
   end
   return frame
 end
 
-function CreateFrame(frameType, name, parent)
-  return mock.create_frame(frameType, name, parent)
+function CreateFrame(frameType, name, parent, template)
+  return mock.create_frame(frameType, name, parent, template)
 end
 
 function mock.fire(event, ...)
@@ -278,6 +285,12 @@ function AuctionFrameTab_OnClick(frame)
 end
 
 function PanelTemplates_TabResize(frame, padding)
+  local name = frame and frame:GetName()
+  if name and string.find(name, "^AuctionFrameTab") then
+    assert(_G[name .. "Left"], name .. "Left missing")
+    assert(_G[name .. "Middle"], name .. "Middle missing")
+    assert(_G[name .. "Text"], name .. "Text missing")
+  end
   frame.tabPadding = padding
 end
 

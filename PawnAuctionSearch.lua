@@ -205,7 +205,8 @@ function addon:InitializeAuctionTab()
     return
   end
 
-  local tab = _G.AuctionFrameTab4 or CreateFrame("Button", "AuctionFrameTab4", AuctionFrame)
+  local tab = _G.AuctionFrameTab4
+    or CreateFrame("Button", "AuctionFrameTab4", AuctionFrame, "AuctionTabTemplate")
   tab:SetID(4)
   tab:SetText(self.TAB_LABEL)
   tab:SetPoint("LEFT", AuctionFrameTab3, "RIGHT", -8, 0)
@@ -276,7 +277,7 @@ function addon:EnsureScaleSelected()
 end
 
 function addon:CreateScaleSelector(parent)
-  local label = parent:CreateFontString("PawnAuctionSearchScaleLabel")
+  local label = parent:CreateFontString("PawnAuctionSearchScaleLabel", "ARTWORK", "GameFontNormal")
   label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
   self.scaleLabel = label
 
@@ -631,13 +632,13 @@ function addon:CreateMainFrame()
 
   self:CreateScaleSelector(frame)
 
-  local status = frame:CreateFontString("PawnAuctionSearchStatusText")
+  local status = frame:CreateFontString("PawnAuctionSearchStatusText", "ARTWORK", "GameFontNormal")
   status:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -8)
   status:SetText("Choose a Pawn scale, then search.")
   frame.statusText = status
   self.statusText = status
 
-  local button = CreateFrame("Button", "PawnAuctionSearchButton", frame)
+  local button = CreateFrame("Button", "PawnAuctionSearchButton", frame, "UIPanelButtonTemplate")
   button:SetSize(96, 22)
   button:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -10)
   button:SetText("Search")
@@ -669,11 +670,11 @@ function addon:CreateResults(parent)
     row:SetScript("OnClick", function()
       addon:SelectResult(index)
     end)
-    row.nameText = row:CreateFontString(nil)
+    row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
-    row.deltaText = row:CreateFontString(nil)
+    row.deltaText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.deltaText:SetPoint("LEFT", row, "LEFT", 260, 0)
-    row.priceText = row:CreateFontString(nil)
+    row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.priceText:SetPoint("LEFT", row, "LEFT", 360, 0)
     row:Hide()
     rows[index] = row
