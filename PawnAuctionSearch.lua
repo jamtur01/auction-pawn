@@ -4,6 +4,31 @@ _G.PawnAuctionSearch = addon
 addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
+addon.SCALE_DROPDOWN_WIDTH = 260
+addon.RESULTS_LEFT_OFFSET = 300
+addon.RESULT_ROW_WIDTH = 390
+addon.RESULT_DELTA_OFFSET = 210
+addon.RESULT_PRICE_OFFSET = 290
+
+addon.slotFilters = {
+  { label = "Head", slots = { "HeadSlot" } },
+  { label = "Neck", slots = { "NeckSlot" } },
+  { label = "Shoulder", slots = { "ShoulderSlot" } },
+  { label = "Back", slots = { "BackSlot" } },
+  { label = "Chest", slots = { "ChestSlot" } },
+  { label = "Wrist", slots = { "WristSlot" } },
+  { label = "Hands", slots = { "HandsSlot" } },
+  { label = "Waist", slots = { "WaistSlot" } },
+  { label = "Legs", slots = { "LegsSlot" } },
+  { label = "Feet", slots = { "FeetSlot" } },
+  { label = "Finger", slots = { "Finger0Slot", "Finger1Slot" } },
+  { label = "Trinket", slots = { "Trinket0Slot", "Trinket1Slot" } },
+  { label = "Main Hand", slots = { "MainHandSlot" } },
+  { label = "Off-hand", slots = { "SecondaryHandSlot" } },
+  { label = "Ranged", slots = { "RangedSlot" } },
+  { label = "Shirt", slots = { "ShirtSlot" } },
+  { label = "Tabard", slots = { "TabardSlot" } },
+}
 
 addon.defaults = {
   scaleName = "",
@@ -155,6 +180,16 @@ local function copyDefaults(defaults, saved)
   end
 end
 
+function addon:EnsureDatabase()
+  PawnAuctionSearchDB = PawnAuctionSearchDB or {}
+  local hadSlots = type(PawnAuctionSearchDB.slots) == "table"
+  copyDefaults(self.defaults, PawnAuctionSearchDB)
+  self:NormalizeOptions(PawnAuctionSearchDB, hadSlots)
+  self.db = PawnAuctionSearchDB
+  return self.db
+end
+
+
 addon.CopyDefaults = copyDefaults
 
 function addon:NormalizeOptions(saved, hadSlots)
@@ -206,11 +241,7 @@ function addon:OnEvent(event, arg1)
     if arg1 ~= self.ADDON_NAME then
       return
     end
-    PawnAuctionSearchDB = PawnAuctionSearchDB or {}
-    local hadSlots = type(PawnAuctionSearchDB.slots) == "table"
-    copyDefaults(self.defaults, PawnAuctionSearchDB)
-    self:NormalizeOptions(PawnAuctionSearchDB, hadSlots)
-    self.db = PawnAuctionSearchDB
+    self:EnsureDatabase()
     return
   end
 
@@ -276,7 +307,7 @@ function addon:UpdateScaleLabel()
 end
 
 function addon:SetScale(scaleName)
-  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  self.db = self:EnsureDatabase()
   self.db.scaleName = scaleName
   if self.scaleDropDown and UIDropDownMenu_SetSelectedValue then
     UIDropDownMenu_SetSelectedValue(self.scaleDropDown, scaleName)
@@ -288,7 +319,7 @@ function addon:SetScale(scaleName)
 end
 
 function addon:EnsureScaleSelected()
-  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  self.db = self:EnsureDatabase()
   if type(self.db.scaleName) == "string" and self.db.scaleName ~= ""
     and PawnDoesScaleExist(self.db.scaleName) then
     return true
@@ -315,7 +346,7 @@ function addon:CreateScaleSelector(parent)
   dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -16, -4)
   self.scaleDropDown = dropdown
   if UIDropDownMenu_SetWidth then
-    UIDropDownMenu_SetWidth(dropdown, 180)
+    UIDropDownMenu_SetWidth(dropdown, self.SCALE_DROPDOWN_WIDTH)
   end
   if UIDropDownMenu_Initialize then
     UIDropDownMenu_Initialize(dropdown, function()
@@ -356,13 +387,20 @@ function addon:ReadAuctionRow(index)
   if not name or not link then
     return nil
   end
+  local page = self.scanPage or 0
+  local pageIndex = index
+  if self.fastScanActive then
+    page = math.floor((index - 1) / self.AUCTIONS_PER_PAGE)
+    pageIndex = ((index - 1) % self.AUCTIONS_PER_PAGE) + 1
+  end
+
 
   local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType,
     itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice =
     GetItemInfo(link)
   return {
-    index = index,
-    page = self.scanPage or 0,
+    index = pageIndex,
+    page = page,
     name = itemName or name,
     auctionName = name,
     link = itemLink or link,
@@ -465,6 +503,23 @@ function addon:IsSlotEnabled(slotName)
     return true
   end
   return not alias or not self.db or self.db[alias] ~= false
+end
+
+function addon:IsSlotFilterEnabled(filter)
+  for _, slotName in ipairs(filter.slots) do
+    if not self:IsSlotEnabled(slotName) then
+      return false
+    end
+  end
+  return true
+end
+
+function addon:SetSlotFilter(filter, enabled)
+  self.db = self:EnsureDatabase()
+  self.db.slots = self.db.slots or {}
+  for _, slotName in ipairs(filter.slots) do
+    self.db.slots[slotName] = enabled and true or false
+  end
 end
 
 local function playerKnowsSpell(spellId)
@@ -669,6 +724,50 @@ function addon:SelectAuctionTab(index)
   AuctionFrame.type = "list"
 end
 
+local function addSlotFilterCheckButton(addon, parent, filter, index, title)
+  local column = math.floor((index - 1) / 9)
+  local row = (index - 1) % 9
+  local check = CreateFrame(
+    "CheckButton",
+    "PawnAuctionSearchSlotFilter" .. index,
+    parent,
+    "UICheckButtonTemplate"
+  )
+  check:SetSize(20, 20)
+  if row == 0 then
+    check:SetPoint("TOPLEFT", title, "BOTTOMLEFT", column * 145, -4)
+  else
+    check:SetPoint("TOPLEFT", parent.slotControls[index - 1], "BOTTOMLEFT", 0, -2)
+  end
+  check:SetChecked(addon:IsSlotFilterEnabled(filter))
+  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
+  check.labelText:SetText(filter.label)
+  check:SetScript("OnClick", function(button)
+    addon:SetSlotFilter(filter, button:GetChecked())
+  end)
+  parent.slotControls[index] = check
+end
+
+function addon:CreateSlotFilters(parent, anchor)
+  if parent.slotControls then
+    return parent.slotControls
+  end
+  local title = parent:CreateFontString(
+    "PawnAuctionSearchSlotFilterTitle",
+    "ARTWORK",
+    "GameFontNormal"
+  )
+  title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -12)
+  title:SetText("Slots")
+  parent.slotControls = {}
+  for index, filter in ipairs(self.slotFilters) do
+    addSlotFilterCheckButton(self, parent, filter, index, title)
+  end
+  self.slotControls = parent.slotControls
+  return parent.slotControls
+end
+
 function addon:CreateMainFrame()
   if self.mainFrame then
     return self.mainFrame
@@ -695,6 +794,7 @@ function addon:CreateMainFrame()
   end)
   frame.searchButton = button
 
+  self:CreateSlotFilters(frame, button)
   self.resultRows = self:CreateResults(frame)
   self.mainFrame = frame
   return frame
@@ -708,11 +808,11 @@ function addon:CreateResults(parent)
   local previous
   for index = 1, 10 do
     local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
-    row:SetSize(560, 20)
+    row:SetSize(self.RESULT_ROW_WIDTH, 20)
     if previous then
       row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
     else
-      row:SetPoint("TOPLEFT", parent.searchButton, "BOTTOMLEFT", 0, -14)
+      row:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -32)
     end
     row:RegisterForClicks("LeftButtonUp")
     row:SetScript("OnClick", function()
@@ -721,9 +821,9 @@ function addon:CreateResults(parent)
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.deltaText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.deltaText:SetPoint("LEFT", row, "LEFT", 260, 0)
+    row.deltaText:SetPoint("LEFT", row, "LEFT", self.RESULT_DELTA_OFFSET, 0)
     row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.priceText:SetPoint("LEFT", row, "LEFT", 360, 0)
+    row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
     row:Hide()
     rows[index] = row
     previous = row
@@ -736,6 +836,57 @@ function addon:SetStatus(message)
   if self.statusText then
     self.statusText:SetText(message)
   end
+end
+
+local function copyAuctionRow(row)
+  local copy = {}
+  for key, value in pairs(row) do
+    copy[key] = value
+  end
+  return copy
+end
+
+function addon:FinishScan(statusSuffix)
+  table.sort(self.results, sortByScore)
+  self.scanActive = false
+  self.fastScanActive = false
+  local status = "Found " .. tostring(#self.results) .. " upgrade auctions"
+  if statusSuffix then
+    status = status .. " " .. statusSuffix
+  end
+  self:SetStatus(status .. ".")
+  self:UpdateResults()
+end
+
+function addon:ScoreCachedAuctions()
+  if not self.auctionCacheRows or #self.auctionCacheRows == 0 then
+    return false
+  end
+  self.results = {}
+  for _, cachedRow in ipairs(self.auctionCacheRows) do
+    local result = self:ScoreAuction(copyAuctionRow(cachedRow), self.scanScaleName)
+    if result then
+      table.insert(self.results, result)
+    end
+  end
+  self:FinishScan("from cached scan")
+  return true
+end
+
+function addon:QueryFastScan()
+  local _, canQueryAll = CanSendAuctionQuery()
+  if not canQueryAll then
+    return false
+  end
+  self.waitingForQuery = false
+  self.waitingPage = nil
+  self.fastScanActive = true
+  self.currentQueryPage = 0
+  self.currentAuctionPage = 0
+  self.auctionCacheRows = {}
+  QueryAuctionItems("", "", "", nil, nil, nil, 0, false, -1, true)
+  self:SetStatus("Fast scanning auction house...")
+  return true
 end
 
 function addon:QueryAuctionPage(page, status)
@@ -777,7 +928,7 @@ function addon:OnUpdate()
 end
 
 function addon:StartScan()
-  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  self.db = self:EnsureDatabase()
   self:EnsureScaleSelected()
   local valid, scaleOrMessage = self:ValidateScale(self.db and self.db.scaleName)
   if not valid then
@@ -787,10 +938,18 @@ function addon:StartScan()
   end
   self.results = {}
   self.scanActive = true
+  self.fastScanActive = false
   self.scanPage = 0
   self.scanScaleName = scaleOrMessage
   self:UpdateResults()
 
+  if self:QueryFastScan() then
+    return
+  end
+  if self:ScoreCachedAuctions() then
+    return
+  end
+  self.auctionCacheRows = {}
   self:QueryScanPage()
 end
 
@@ -807,13 +966,22 @@ function addon:OnAuctionItemListUpdate()
   count = count or 0
   total = total or count
   self.results = self.results or {}
-  self.currentAuctionPage = self.scanPage
+  self.auctionCacheRows = self.auctionCacheRows or {}
+  self.currentAuctionPage = self.fastScanActive and 0 or self.scanPage
   for index = 1, count do
     local row = self:ReadAuctionRow(index)
-    local result = self:ScoreAuction(row, self.scanScaleName)
-    if result then
-      table.insert(self.results, result)
+    if row then
+      table.insert(self.auctionCacheRows, copyAuctionRow(row))
+      local result = self:ScoreAuction(row, self.scanScaleName)
+      if result then
+        table.insert(self.results, result)
+      end
     end
+  end
+
+  if self.fastScanActive then
+    self:FinishScan("from fast scan")
+    return
   end
 
   local scanned = (self.scanPage + 1) * self.AUCTIONS_PER_PAGE
@@ -823,10 +991,7 @@ function addon:OnAuctionItemListUpdate()
     return
   end
 
-  table.sort(self.results, sortByScore)
-  self.scanActive = false
-  self:SetStatus("Found " .. tostring(#self.results) .. " upgrade auctions.")
-  self:UpdateResults()
+  self:FinishScan()
 end
 
 function addon:UpdateResults()

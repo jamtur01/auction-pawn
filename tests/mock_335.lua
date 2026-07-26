@@ -480,20 +480,27 @@ local function auction_link(itemId, name)
 end
 
 function CanSendAuctionQuery()
-  return mock.canQuery ~= false
+  return mock.canQuery ~= false, mock.canQueryAll == true
 end
 
 function QueryAuctionItems(...)
   mock.lastAuctionQuery = {...}
-  mock.currentPage = select(7, ...) or 0
+  mock.fastScan = select(10, ...) == true
+  mock.currentPage = mock.fastScan and 0 or (select(7, ...) or 0)
 end
 
 local function currentAuction(index)
+  if mock.fastScan then
+    return mock.auctions[index]
+  end
   return mock.auctions[((mock.currentPage or 0) * 50) + index]
 end
 
 function GetNumAuctionItems(listType)
   local total = #mock.auctions
+  if mock.fastScan then
+    return total, total
+  end
   local remaining = total - ((mock.currentPage or 0) * 50)
   if remaining < 0 then
     remaining = 0
@@ -617,6 +624,8 @@ function mock.reset()
   mock.lastAuctionQuery = nil
   mock.currentPage = 0
   mock.canQuery = true
+  mock.canQueryAll = false
+  mock.fastScan = false
   mock.mainHandItemId = 9001
   mock.offHandItemId = nil
   mock.knownSpells = {}

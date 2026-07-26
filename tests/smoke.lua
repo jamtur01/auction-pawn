@@ -44,6 +44,16 @@ local function count_values(value)
   return count
 end
 
+local function find_slot_control(addon, label)
+  for _, control in ipairs(addon.slotControls or {}) do
+    if control.labelText and control.labelText:GetText() == label then
+      return control
+    end
+  end
+  fail("slot control missing: " .. label)
+end
+
+
 local function discover_scales(addon)
   if addon.DiscoverScales then
     return addon:DiscoverScales()
@@ -117,6 +127,31 @@ assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden o
 local scales = discover_scales(PawnAuctionSearch)
 assert_equals(count_values(scales), 1, "scale count")
 assert_equals(first_value(scales), "TestScale", "scale name")
+assert_equals(
+  PawnAuctionSearch.scaleDropDown.width,
+  PawnAuctionSearch.SCALE_DROPDOWN_WIDTH,
+  "scale dropdown width"
+)
+assert_equals(#PawnAuctionSearch.slotControls, #PawnAuctionSearch.slotFilters, "slot control count")
+assert_equals(PawnAuctionSearch.resultRows[1].width, PawnAuctionSearch.RESULT_ROW_WIDTH, "result width")
+
+local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
+fingerControl:SetChecked(false)
+fingerControl.scripts.OnClick(fingerControl)
+assert_equals(PawnAuctionSearchDB.slots.Finger0Slot, false, "finger 0 disabled")
+assert_equals(PawnAuctionSearchDB.slots.Finger1Slot, false, "finger 1 disabled")
+assert_equals(
+  PawnAuctionSearch:ScoreAuction({
+    link = "|cff1eff00|Hitem:1001:0:0:0:0:0:0:0|h[Upgrade Ring]|h|r",
+    equipLoc = "INVTYPE_FINGER",
+    minBid = 10000,
+    minIncrement = 100,
+  }, "TestScale"),
+  nil,
+  "finger result filtered"
+)
+fingerControl:SetChecked(true)
+fingerControl.scripts.OnClick(fingerControl)
 
 PawnAuctionSearchDB = PawnAuctionSearchDB or {}
 PawnAuctionSearchDB.scaleName = ""
@@ -132,6 +167,8 @@ assert_equals(result_delta(results[1]), 20, "upgrade result delta")
 
 PawnAuctionSearch:SelectResult(1)
 assert_equals(_G.selectedAuction, 1, "selected auction index")
+PawnAuctionSearch.auctionCacheRows = nil
+
 
 
 for index = 1, 50 do
@@ -170,6 +207,48 @@ assert_equals(mock.lastAuctionQuery[7], 1, "next page query")
 fire_auction_update(PawnAuctionSearch)
 assert_equals(#get_results(PawnAuctionSearch), 1, "paginated upgrade count")
 assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "paginated result")
+
+mock.canQueryAll = true
+mock.lastAuctionQuery = nil
+mock.currentPage = 0
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery[10], true, "fast scan getAll flag")
+fire_auction_update(PawnAuctionSearch)
+assert_equals(#get_results(PawnAuctionSearch), 1, "fast scan upgrade count")
+assert_equals(#PawnAuctionSearch.auctionCacheRows, 51, "fast scan cache count")
+assert_equals(get_results(PawnAuctionSearch)[1].page, 1, "fast scan result fallback page")
+assert_equals(get_results(PawnAuctionSearch)[1].index, 1, "fast scan result fallback index")
+_G.selectedAuction = nil
+PawnAuctionSearch:SelectResult(1)
+assert_equals(mock.lastAuctionQuery[7], 1, "fast scan selection page requery")
+assert_equals(_G.selectedAuction, nil, "fast scan selection waits for requery")
+fire_auction_update(PawnAuctionSearch)
+assert_equals(_G.selectedAuction, 1, "fast scan page-local auction selected")
+
+
+mock.canQueryAll = false
+mock.lastAuctionQuery = nil
+for index = 1, 51 do
+  mock.auctions[index] = {
+    name = "Downgrade Sword",
+    itemId = 1002,
+    link = "|cff1eff00|Hitem:1002:0:0:0:0:0:0:0|h[Downgrade Sword]|h|r",
+    quality = 2,
+    level = 80,
+    minBid = 10000,
+    minIncrement = 100,
+    buyoutPrice = 20000,
+    bidAmount = 0,
+    owner = "SellerTwo",
+    timeLeft = 2,
+  }
+end
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery, nil, "cached rescore avoids auction query")
+assert_equals(#get_results(PawnAuctionSearch), 1, "cached upgrade count")
+assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "cached result")
+PawnAuctionSearch.auctionCacheRows = nil
+mock.fastScan = false
 
 mock.auctions[1] = {
   name = "Upgrade Sword",
@@ -210,6 +289,8 @@ assert_equals(mock.lastAuctionQuery[7], 0, "selection page requery")
 assert_equals(_G.selectedAuction, nil, "selection waits for requery")
 fire_auction_update(PawnAuctionSearch)
 assert_equals(_G.selectedAuction, 1, "requeried page selected auction")
+
+PawnAuctionSearch.auctionCacheRows = nil
 
 mock.canQuery = false
 start_scan(PawnAuctionSearch)
