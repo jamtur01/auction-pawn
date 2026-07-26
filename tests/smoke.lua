@@ -216,6 +216,14 @@ mock.lastAuctionQuery = nil
 mock.currentPage = 0
 start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery[10], true, "fast scan getAll flag")
+mock.lastAuctionQuery = nil
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery, nil, "active fast scan is not restarted")
+mock.fire("AUCTION_HOUSE_CLOSED")
+assert_equals(PawnAuctionSearch.scanActive, false, "auction close cancels scan")
+assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "closed scan cache remains invalid")
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery[10], true, "fresh fast scan after close")
 fire_auction_update(PawnAuctionSearch)
 assert_equals(#get_results(PawnAuctionSearch), 1, "fast scan upgrade count")
 assert_equals(#PawnAuctionSearch.auctionCacheRows, 51, "fast scan cache count")
@@ -266,6 +274,7 @@ start_scan(PawnAuctionSearch)
 mock.canQuery = false
 fire_auction_update(PawnAuctionSearch)
 assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "partial cache remains invalid")
+mock.fire("AUCTION_HOUSE_CLOSED")
 mock.canQuery = true
 mock.lastAuctionQuery = nil
 start_scan(PawnAuctionSearch)

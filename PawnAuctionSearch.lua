@@ -224,6 +224,23 @@ function addon:HookBlizzardTabs()
 end
 
 
+function addon:CancelActiveScan(message)
+  if not self.scanActive and not self.waitingForQuery then
+    return
+  end
+  self.scanActive = false
+  self.fastScanActive = false
+  self.waitingForQuery = false
+  self.waitingPage = nil
+  self.pendingSelection = nil
+  self.auctionCacheRows = nil
+  self.auctionCacheComplete = false
+  if message then
+    self:SetStatus(message)
+  end
+end
+
+
 function addon:OnLoad()
   self.eventFrame = self.eventFrame or CreateFrame("Frame")
   self.eventFrame:SetScript("OnEvent", function(_, event, arg1)
@@ -235,6 +252,7 @@ function addon:OnLoad()
   self.eventFrame:RegisterEvent("ADDON_LOADED")
   self.eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
   self.eventFrame:RegisterEvent("AUCTION_ITEM_LIST_UPDATE")
+  self.eventFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
 end
 
 function addon:OnEvent(event, arg1)
@@ -248,6 +266,8 @@ function addon:OnEvent(event, arg1)
 
   if event == "AUCTION_HOUSE_SHOW" then
     self:InitializeAuctionTab()
+  elseif event == "AUCTION_HOUSE_CLOSED" then
+    self:CancelActiveScan("Auction House closed; scan canceled.")
   elseif event == "AUCTION_ITEM_LIST_UPDATE" then
     self:OnAuctionItemListUpdate()
   end
@@ -937,6 +957,14 @@ function addon:StartScan()
   if not valid then
     self.scanActive = false
     self:SetStatus(scaleOrMessage)
+    return
+  end
+  if self.scanActive then
+    if self.fastScanActive then
+      self:SetStatus("Fast scan already in progress...")
+    else
+      self:SetStatus("Scan already in progress...")
+    end
     return
   end
   self.results = {}
