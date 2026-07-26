@@ -1132,7 +1132,7 @@ function addon:GetSlotNamesForAutoGearSlotId(slotId)
 end
 
 function addon:IsSupportedAutoGearAuction(row, info)
-  if not info or not info.isGear then
+  if not info or info.unusable or not info.isGear then
     return false
   end
   if row.itemType == "Container" then

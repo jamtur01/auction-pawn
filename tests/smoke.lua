@@ -263,9 +263,11 @@ local autoGearUpdateCount = 0
 function AutoGearReadItemInfo(inventoryID, lootRollID, container, slot, questRewardIndex, link)
   local isBag = link and string.find(link, "item:1007", 1, true)
   local isTwoHand = link and string.find(link, "item:1008", 1, true)
+  local isUnusable = link and string.find(link, "item:1009", 1, true)
   return {
     link = link,
     isGear = true,
+    unusable = isUnusable,
     shouldShowScoreInTooltip = true,
     validGearSlots = { isBag and 20 or (isTwoHand and 19 or GetInventorySlotInfo("FeetSlot")) },
     numValidGearSlots = 1,
@@ -275,7 +277,13 @@ function AutoGearDetermineItemScore(info)
   if info.link and string.find(info.link, "item:1006", 1, true) then
     return 45
   end
+  if info.link and string.find(info.link, "item:1007", 1, true) then
+    return 50
+  end
   if info.link and string.find(info.link, "item:1008", 1, true) then
+    return 50
+  end
+  if info.link and string.find(info.link, "item:1009", 1, true) then
     return 50
   end
   return 0
@@ -584,6 +592,7 @@ assert_equals(
   nil,
   "AutoGear source excludes scores displayed as zero"
 )
+AutoGearDetermineItemScore = oldAutoGearScore
 local autoGearBagRow = {
   link = "|cff1eff00|Hitem:1007:0:0:0:0:0:0:0|h[Small Brown Pouch]|h|r",
   equipLoc = "INVTYPE_BAG",
@@ -611,14 +620,29 @@ local autoGearTwoHandRow = {
   buyoutPrice = 20000,
   bidAmount = 0,
 }
-PawnAuctionSearchDB.slots.MainHandSlot = false
+PawnAuctionSearchDB.slots.MainHandSlot = true
 PawnAuctionSearchDB.slots.SecondaryHandSlot = false
 assert_equals(
   PawnAuctionSearch:ScoreAuction(autoGearTwoHandRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
   nil,
-  "AutoGear source respects disabled 2H weapon slots"
+  "AutoGear source requires both 2H weapon slots"
 )
-PawnAuctionSearchDB.slots.MainHandSlot = true
+local autoGearUnusableRow = {
+  link = "|cff1eff00|Hitem:1009:0:0:0:0:0:0:0|h[Wrong Armor]|h|r",
+  equipLoc = "INVTYPE_FEET",
+  itemType = "Armor",
+  itemSubType = "Mail",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearUnusableRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source excludes unusable items"
+)
 PawnAuctionSearchDB.slots.SecondaryHandSlot = true
 AutoGearDetermineItemScore = oldAutoGearScore
 PawnAuctionSearchDB.bestPrice = true
