@@ -6,15 +6,15 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
-addon.RESULTS_LEFT_OFFSET = 0
-addon.RESULTS_TOP_OFFSET = -240
-addon.RESULT_ROW_WIDTH = 660
-addon.RESULT_NAME_WIDTH = 270
-addon.RESULT_DELTA_OFFSET = 310
-addon.RESULT_PRICE_OFFSET = 390
-addon.RESULT_BID_OFFSET = 535
-addon.RESULT_BUYOUT_OFFSET = 590
-addon.RESULTS_VISIBLE_ROWS = 5
+addon.RESULTS_LEFT_OFFSET = 280
+addon.RESULTS_TOP_OFFSET = -220
+addon.RESULT_ROW_WIDTH = 430
+addon.RESULT_NAME_WIDTH = 200
+addon.RESULT_DELTA_OFFSET = 220
+addon.RESULT_PRICE_OFFSET = 300
+addon.RESULT_BID_OFFSET = 365
+addon.RESULT_BUYOUT_OFFSET = 405
+addon.RESULTS_VISIBLE_ROWS = 4
 addon.RESULT_ROW_HEIGHT = 22
 addon.OPTION_FILTER_ROWS = 6
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
@@ -1171,8 +1171,7 @@ function addon:CreateMainFrame()
   self:CreateScaleSelector(frame)
 
   local status = frame:CreateFontString("PawnAuctionSearchStatusText", "ARTWORK", "GameFontNormal")
-  status:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -4)
-  status:SetWidth(250)
+  status:SetPoint("TOPLEFT", frame, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -195)
   status:SetText("Choose a Pawn scale, then search.")
   frame.statusText = status
   self.statusText = status

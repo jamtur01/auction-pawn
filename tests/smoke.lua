@@ -195,11 +195,26 @@ assert_equals(
   PawnAuctionSearch.RESULTS_VISIBLE_ROWS,
   "visible result row count"
 )
+assert_equals(
+  PawnAuctionSearch.statusText.point[2],
+  PawnAuctionSearch.mainFrame,
+  "status is anchored to content frame"
+)
+assert_equals(
+  PawnAuctionSearch.statusText.point[4],
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET,
+  "status starts in result pane"
+)
 assert_truthy(PawnAuctionSearch.resultScrollFrame, "result scroll frame exists")
 assert_equals(
   PawnAuctionSearch.resultsHeader.point[5],
   PawnAuctionSearch.RESULTS_TOP_OFFSET,
   "results start below top controls"
+)
+assert_equals(
+  PawnAuctionSearch.resultsHeader.point[4],
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET,
+  "results start in right pane"
 )
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
