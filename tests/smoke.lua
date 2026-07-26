@@ -217,8 +217,8 @@ assert_equals(
   "results start in right pane"
 )
 assert_truthy(
-  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 718,
-  "result pane fits inset 3.3.5a AuctionFrame width"
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 686,
+  "result pane reserves 3.3.5a FauxScrollFrame scrollbar gutter"
 )
 assert_truthy(
   PawnAuctionSearch.RESULT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].priceText.width
