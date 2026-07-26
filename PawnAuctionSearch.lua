@@ -7,14 +7,14 @@ addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
-addon.RESULTS_TOP_OFFSET = -220
+addon.RESULTS_TOP_OFFSET = -210
 addon.RESULT_ROW_WIDTH = 420
 addon.RESULT_NAME_WIDTH = 150
 addon.RESULT_DELTA_OFFSET = 165
 addon.RESULT_PRICE_OFFSET = 220
-addon.RESULT_BID_OFFSET = 315
-addon.RESULT_BUYOUT_OFFSET = 369
-addon.RESULTS_VISIBLE_ROWS = 4
+addon.RESULT_BID_OFFSET = 250
+addon.RESULT_BUYOUT_OFFSET = 336
+addon.RESULTS_VISIBLE_ROWS = 3
 addon.RESULT_ROW_HEIGHT = 37
 addon.OPTION_FILTER_ROWS = 6
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
@@ -1227,9 +1227,9 @@ function addon:CreateResults(parent)
     self.RESULTS_VISIBLE_ROWS * self.RESULT_ROW_HEIGHT
   )
   scrollFrame:SetScript("OnVerticalScroll", function(frame, offset)
-    local rowOffset = math.floor((offset or 0) / addon.RESULT_ROW_HEIGHT + 0.5)
-    FauxScrollFrame_SetOffset(frame, rowOffset)
-    addon:UpdateResults()
+    FauxScrollFrame_OnVerticalScroll(frame, offset, addon.RESULT_ROW_HEIGHT, function()
+      addon:UpdateResults()
+    end)
   end)
   parent.resultScrollFrame = scrollFrame
   self.resultScrollFrame = scrollFrame
@@ -1282,7 +1282,7 @@ function addon:CreateResults(parent)
     parent,
     "UIPanelButtonTemplate"
   )
-  bidAction:SetSize(48, 20)
+  bidAction:SetSize(80, 22)
   bidAction:SetPoint("TOPLEFT", scrollFrame, "BOTTOMLEFT", self.RESULT_BID_OFFSET, -6)
   bidAction:SetText("Bid")
   bidAction:SetScript("OnClick", function()
@@ -1298,9 +1298,9 @@ function addon:CreateResults(parent)
     parent,
     "UIPanelButtonTemplate"
   )
-  buyoutAction:SetSize(48, 20)
+  buyoutAction:SetSize(80, 22)
   buyoutAction:SetPoint("LEFT", bidAction, "RIGHT", 6, 0)
-  buyoutAction:SetText("Buy")
+  buyoutAction:SetText("Buyout")
   buyoutAction:SetScript("OnClick", function()
     addon:PlaceResultBid(addon:GetActionResultIndex(), true)
   end)
@@ -1675,6 +1675,10 @@ end
 function addon:ResetResultScroll()
   if self.resultScrollFrame and FauxScrollFrame_SetOffset then
     FauxScrollFrame_SetOffset(self.resultScrollFrame, 0)
+    local scrollBar = _G[self.resultScrollFrame:GetName() .. "ScrollBar"]
+    if scrollBar and scrollBar.SetValue then
+      scrollBar:SetValue(0)
+    end
   end
 end
 
@@ -1868,10 +1872,10 @@ function addon:LoadLiveResult(result, message)
 end
 
 function addon:GetCurrentAuctionBid(index)
-  local _, _, _, _, _, _, minBid, minIncrement, buyoutPrice, bidAmount =
+  local _, _, _, _, _, _, minBid, minIncrement, buyoutPrice, bidAmount, highBidder, owner =
     GetAuctionItemInfo("list", index)
   local bid = bidAmount and bidAmount > 0 and bidAmount + (minIncrement or 0) or minBid
-  return bid or 0, buyoutPrice or 0
+  return bid or 0, buyoutPrice or 0, highBidder, owner
 end
 
 function addon:CurrentAuctionMatchesResult(index, result)
@@ -1885,6 +1889,30 @@ function addon:CurrentAuctionMatchesResult(index, result)
     and (buyoutPrice or 0) == (result.buyoutPrice or 0)
     and (bidAmount or 0) == (result.bidAmount or 0)
     and owner == result.owner
+end
+
+function addon:ShowBidConfirmation(index, result, buyout, price)
+  if not StaticPopup_Show then
+    self:SetStatus("Auction confirmation is unavailable; bid canceled.")
+    return
+  end
+  SetSelectedAuctionItem("list", index)
+  if AuctionFrame then
+    AuctionFrame.type = "list"
+  end
+  if buyout then
+    if AuctionFrame then
+      AuctionFrame.buyoutPrice = price
+    end
+    StaticPopup_Show("BUYOUT_AUCTION")
+    self:SetStatus("Confirm buyout for " .. (result.name or "auction result") .. ".")
+    return
+  end
+  if BrowseBidPrice and MoneyInputFrame_SetCopper then
+    MoneyInputFrame_SetCopper(BrowseBidPrice, price)
+  end
+  StaticPopup_Show("BID_AUCTION")
+  self:SetStatus("Confirm bid for " .. (result.name or "auction result") .. ".")
 end
 
 function addon:PlaceResultBid(resultIndex, buyout)
@@ -1915,23 +1943,33 @@ function addon:PlaceResultBid(resultIndex, buyout)
     self:SetStatus("Auction result changed. Search again before bidding.")
     return
   end
-  SetSelectedAuctionItem("list", index)
-  local bidPrice, buyoutPrice = self:GetCurrentAuctionBid(index)
+  local bidPrice, buyoutPrice, highBidder, owner = self:GetCurrentAuctionBid(index)
+  if owner == UnitName("player") then
+    self:SetStatus("You cannot bid on your own auction.")
+    return
+  end
   local price = buyout and buyoutPrice or bidPrice
   if buyout and price <= 0 then
     self:SetStatus("Selected auction has no buyout price.")
+    return
+  end
+  if not buyout and highBidder then
+    self:SetStatus("You are already the high bidder.")
     return
   end
   if price <= 0 then
     self:SetStatus("Selected auction has no valid bid price.")
     return
   end
-  PlaceAuctionBid("list", index, price)
-  if buyout then
-    self:SetStatus("Buyout placed for " .. (result.name or "auction result") .. ".")
-  else
-    self:SetStatus("Bid placed for " .. (result.name or "auction result") .. ".")
+  if GetMoney and GetMoney() < price then
+    self:SetStatus("You do not have enough money for this auction.")
+    return
   end
+  if MAXIMUM_BID_PRICE and price > MAXIMUM_BID_PRICE then
+    self:SetStatus("Selected auction exceeds the maximum bid price.")
+    return
+  end
+  self:ShowBidConfirmation(index, result, buyout, price)
 end
 
 function addon:CompletePendingSelection()

@@ -239,6 +239,9 @@ function mock.create_frame(frameType, name, parent, template)
       _G[name .. "Right"] = mock.create_frame("Texture", name .. "Right", frame)
       _G[name .. "Text"] = mock.create_frame("FontString", name .. "Text", frame)
     end
+    if template == "FauxScrollFrameTemplate" then
+      _G[name .. "ScrollBar"] = mock.create_frame("Slider", name .. "ScrollBar", frame)
+    end
   end
   return frame
 end
@@ -361,6 +364,21 @@ end
 
 function MoneyInputFrame_ResetMoney(frame)
   frame.money = 0
+end
+
+function StaticPopup_Show(name)
+  mock.staticPopupName = name
+end
+
+function FauxScrollFrame_OnVerticalScroll(frame, value, itemHeight, updateFunction)
+  local scrollBar = _G[frame:GetName() .. "ScrollBar"]
+  if scrollBar then
+    scrollBar:SetValue(value)
+  end
+  frame.offset = math.floor((value / itemHeight) + 0.5)
+  if updateFunction then
+    updateFunction(frame)
+  end
 end
 
 function MoneyFrame_Update(frameName, amount)
@@ -640,11 +658,12 @@ function mock.reset()
   mock.canQueryAll = false
   mock.fastScan = false
   mock.forcePagedListUpdate = false
+  mock.money = 1000000
   mock.placedBid = nil
   mock.mainHandItemId = 9001
   mock.offHandItemId = nil
   mock.knownSpells = {}
-  mock.placedBid = nil
+  mock.staticPopupName = nil
   mock.selectedAuctionList = nil
   _G.selectedAuction = nil
 
@@ -688,6 +707,7 @@ function mock.reset()
   AuctionFrameTab1:SetText("Browse")
   AuctionFrameTab2:SetText("Bids")
   AuctionFrameTab3:SetText("Auctions")
+  BrowseBidPrice = mock.create_frame("Frame", "BrowseBidPrice", AuctionFrameBrowse)
   GameTooltip = mock.create_frame("GameTooltip", "GameTooltip", UIParent)
   DEFAULT_CHAT_FRAME = mock.create_frame("Frame", "DEFAULT_CHAT_FRAME", UIParent)
   DEFAULT_CHAT_FRAME.AddMessage = DEFAULT_CHAT_FRAME_AddMessage

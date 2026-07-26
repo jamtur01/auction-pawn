@@ -235,6 +235,11 @@ assert_truthy(
     <= PawnAuctionSearch.RESULT_ROW_WIDTH,
   "Buy action stays inside result pane"
 )
+local resultBottom = 72 - PawnAuctionSearch.RESULTS_TOP_OFFSET + 12 + 8
+  + (PawnAuctionSearch.RESULTS_VISIBLE_ROWS * PawnAuctionSearch.RESULT_ROW_HEIGHT)
+  + 6
+  + PawnAuctionSearch.buyoutButton.height
+assert_truthy(resultBottom <= 447, "result rows and actions stay inside AuctionFrame")
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
 fingerControl:SetChecked(false)
@@ -296,9 +301,12 @@ assert_equals(GameTooltip.hyperlink, results[1].link, "result hover shows item t
 PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
 PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
 assert_equals(PawnAuctionSearch.bidButton.shown, true, "selected row shows action buttons")
+mock.staticPopupName = nil
 PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
-assert_equals(mock.placedBid.index, 1, "bid action uses selected row")
-assert_equals(mock.placedBid.bid, 10000, "bid action uses bid price")
+assert_equals(_G.selectedAuction, 1, "bid action selects verified row")
+assert_equals(mock.placedBid, nil, "bid action waits for confirmation popup")
+assert_equals(mock.staticPopupName, "BID_AUCTION", "bid action opens confirmation")
+assert_equals(BrowseBidPrice.money, 10000, "bid action sets confirmation price")
 mock.placedBid = nil
 results[1].buyoutPrice = 0
 mock.auctions[1].buyoutPrice = 0
@@ -308,18 +316,25 @@ assert_equals(
   "Bid 1g 0s 0c / No buyout",
   "missing buyout shown explicitly"
 )
+mock.staticPopupName = nil
 PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid, nil, "missing buyout does not spend")
+assert_equals(mock.staticPopupName, nil, "missing buyout does not open confirmation")
 mock.auctions[1].buyoutPrice = 20000
 results[1].buyoutPrice = 20000
 PawnAuctionSearch:UpdateResults()
+mock.staticPopupName = nil
 mock.placedBid = nil
 PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
-assert_equals(mock.placedBid.bid, 20000, "buyout button uses buyout price")
+assert_equals(mock.placedBid, nil, "buyout action waits for confirmation popup")
+assert_equals(mock.staticPopupName, "BUYOUT_AUCTION", "buyout action opens confirmation")
+assert_equals(AuctionFrame.buyoutPrice, 20000, "buyout action sets confirmation price")
 mock.placedBid = nil
 mock.auctions[1].buyoutPrice = 30000
+mock.staticPopupName = nil
 PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
 assert_equals(mock.placedBid, nil, "changed auction row blocks buyout")
+assert_equals(mock.staticPopupName, nil, "changed auction row blocks confirmation")
 mock.auctions[1].buyoutPrice = 20000
 PawnAuctionSearchDB.canUse = true
 results[1].canUse = false
@@ -503,8 +518,9 @@ fire_auction_update(PawnAuctionSearch)
 assert_equals(_G.selectedAuction, 1, "fast scan bid page load selects auction")
 assert_equals(mock.placedBid, nil, "fast scan page load does not bid")
 PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
-assert_equals(mock.placedBid.index, 1, "fast scan bid second click uses page-local index")
-assert_equals(mock.placedBid.bid, 10000, "fast scan bid second click spends bid price")
+assert_equals(mock.placedBid, nil, "fast scan bid second click waits for confirmation")
+assert_equals(mock.staticPopupName, "BID_AUCTION", "fast scan bid opens confirmation")
+assert_equals(BrowseBidPrice.money, 10000, "fast scan bid sets confirmation price")
 
 mock.canQueryAll = true
 mock.lastAuctionQuery = nil
@@ -690,9 +706,12 @@ assert_equals(
 )
 fire_auction_update(PawnAuctionSearch)
 assert_equals(_G.selectedAuction, 1, "Auctioneer live query selects exact auction")
+mock.staticPopupName = nil
 mock.placedBid = nil
 PawnAuctionSearch.buyoutButton.scripts.OnClick(PawnAuctionSearch.buyoutButton)
-assert_equals(mock.placedBid.bid, 20000, "Auctioneer buyout uses verified live row")
+assert_equals(mock.placedBid, nil, "Auctioneer buyout waits for confirmation popup")
+assert_equals(mock.staticPopupName, "BUYOUT_AUCTION", "Auctioneer buyout opens confirmation")
+assert_equals(AuctionFrame.buyoutPrice, 20000, "Auctioneer buyout sets confirmation price")
 auctioneerIsScanning = true
 start_scan(PawnAuctionSearch)
 assert_equals(
