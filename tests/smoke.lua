@@ -241,6 +241,16 @@ mock.lastAuctionQuery = nil
 start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery, nil, "complete cache avoids available fast scan")
 assert_equals(#get_results(PawnAuctionSearch), 1, "complete cache rescore count")
+local completeCacheRows = PawnAuctionSearch.auctionCacheRows
+mock.canQuery = false
+PawnAuctionSearch.currentAuctionPage = 0
+_G.selectedAuction = nil
+PawnAuctionSearch:SelectResult(1)
+assert_equals(PawnAuctionSearch.waitingForQuery, true, "selection page waits when throttled")
+mock.fire("AUCTION_HOUSE_CLOSED")
+assert_equals(PawnAuctionSearch.auctionCacheComplete, true, "selection close preserves cache")
+assert_equals(PawnAuctionSearch.auctionCacheRows, completeCacheRows, "selection close keeps rows")
+mock.canQuery = true
 
 
 mock.canQueryAll = false

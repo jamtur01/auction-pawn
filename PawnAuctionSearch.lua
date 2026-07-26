@@ -225,7 +225,8 @@ end
 
 
 function addon:CancelActiveScan(message)
-  if not self.scanActive and not self.waitingForQuery then
+  local wasScanning = self.scanActive or self.fastScanActive
+  if not wasScanning and not self.waitingForQuery and not self.pendingSelection then
     return
   end
   self.scanActive = false
@@ -233,10 +234,12 @@ function addon:CancelActiveScan(message)
   self.waitingForQuery = false
   self.waitingPage = nil
   self.pendingSelection = nil
-  self.auctionCacheRows = nil
-  self.auctionCacheComplete = false
-  if message then
-    self:SetStatus(message)
+  if wasScanning then
+    self.auctionCacheRows = nil
+    self.auctionCacheComplete = false
+    if message then
+      self:SetStatus(message)
+    end
   end
 end
 
