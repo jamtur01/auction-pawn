@@ -302,6 +302,13 @@ assert_equals(
   nil,
   "armor preference excludes cloth"
 )
+PawnAuctionSearchDB.force2h = true
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(plateRow, "TestScale"),
+  nil,
+  "force 2h excludes armor"
+)
+PawnAuctionSearchDB.force2h = false
 PawnAuctionSearchDB.armorPreference = ""
 
 PawnAuctionSearch:SelectResult(1)

@@ -599,10 +599,7 @@ function addon:MatchesForceTwoHand(row)
   if not self.db or not self.db.force2h then
     return true
   end
-  local equipLoc = row and row.equipLoc
-  return equipLoc ~= "INVTYPE_WEAPON"
-    and equipLoc ~= "INVTYPE_WEAPONMAINHAND"
-    and equipLoc ~= "INVTYPE_WEAPONOFFHAND"
+  return row and row.equipLoc == "INVTYPE_2HWEAPON"
 end
 
 function addon:MatchesArmorPreference(row)
