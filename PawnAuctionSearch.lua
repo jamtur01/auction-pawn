@@ -237,6 +237,78 @@ function addon:GetScales()
   return scales
 end
 
+function addon:UpdateScaleLabel()
+  if not self.scaleLabel then
+    return
+  end
+  local scaleName = self.db and self.db.scaleName or ""
+  if scaleName == "" then
+    self.scaleLabel:SetText("Scale: none selected")
+  else
+    self.scaleLabel:SetText("Scale: " .. scaleName)
+  end
+end
+
+function addon:SetScale(scaleName)
+  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  self.db.scaleName = scaleName
+  if self.scaleDropDown and UIDropDownMenu_SetSelectedValue then
+    UIDropDownMenu_SetSelectedValue(self.scaleDropDown, scaleName)
+  end
+  if self.scaleDropDown and UIDropDownMenu_SetText then
+    UIDropDownMenu_SetText(self.scaleDropDown, scaleName)
+  end
+  self:UpdateScaleLabel()
+end
+
+function addon:EnsureScaleSelected()
+  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  if type(self.db.scaleName) == "string" and self.db.scaleName ~= ""
+    and PawnDoesScaleExist(self.db.scaleName) then
+    return true
+  end
+  local scales = self:GetScales()
+  if not scales[1] then
+    return false
+  end
+  self:SetScale(scales[1].name)
+  return true
+end
+
+function addon:CreateScaleSelector(parent)
+  local label = parent:CreateFontString("PawnAuctionSearchScaleLabel")
+  label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+  self.scaleLabel = label
+
+  local dropdown = CreateFrame(
+    "Frame",
+    "PawnAuctionSearchScaleDropDown",
+    parent,
+    "UIDropDownMenuTemplate"
+  )
+  dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -16, -4)
+  self.scaleDropDown = dropdown
+  if UIDropDownMenu_SetWidth then
+    UIDropDownMenu_SetWidth(dropdown, 180)
+  end
+  if UIDropDownMenu_Initialize then
+    UIDropDownMenu_Initialize(dropdown, function()
+      for _, scale in ipairs(addon:GetScales()) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = scale.label
+        info.value = scale.name
+        info.func = function()
+          addon:SetScale(scale.name)
+        end
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
+  end
+  self:EnsureScaleSelected()
+  self:UpdateScaleLabel()
+  return dropdown
+end
+
 function addon:ValidateScale(scaleName)
   scaleName = scaleName or (self.db and self.db.scaleName)
   if not pawnIsReady() then
@@ -557,8 +629,10 @@ function addon:CreateMainFrame()
   frame:SetPoint("BOTTOMRIGHT", AuctionFrame, "BOTTOMRIGHT", -20, 40)
   frame:Hide()
 
+  self:CreateScaleSelector(frame)
+
   local status = frame:CreateFontString("PawnAuctionSearchStatusText")
-  status:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  status:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -8)
   status:SetText("Choose a Pawn scale, then search.")
   frame.statusText = status
   self.statusText = status
@@ -630,6 +704,7 @@ end
 
 function addon:StartScan()
   self.db = self.db or PawnAuctionSearchDB or self.defaults
+  self:EnsureScaleSelected()
   local valid, scaleOrMessage = self:ValidateScale(self.db and self.db.scaleName)
   if not valid then
     self.scanActive = false

@@ -114,7 +114,7 @@ assert_equals(count_values(scales), 1, "scale count")
 assert_equals(first_value(scales), "TestScale", "scale name")
 
 PawnAuctionSearchDB = PawnAuctionSearchDB or {}
-PawnAuctionSearchDB.scaleName = "TestScale"
+PawnAuctionSearchDB.scaleName = ""
 
 start_scan(PawnAuctionSearch)
 fire_auction_update(PawnAuctionSearch)
