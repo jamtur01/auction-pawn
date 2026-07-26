@@ -261,17 +261,22 @@ UIDropDownMenu_Initialize(
 assert_equals(mock.dropdownButtons[1].info.value, "TestScale", "scale page resets after shrink")
 local autoGearUpdateCount = 0
 function AutoGearReadItemInfo(inventoryID, lootRollID, container, slot, questRewardIndex, link)
+  local isBag = link and string.find(link, "item:1007", 1, true)
+  local isTwoHand = link and string.find(link, "item:1008", 1, true)
   return {
     link = link,
-    isGear = not (link and string.find(link, "item:1007", 1, true)),
+    isGear = true,
     shouldShowScoreInTooltip = true,
-    validGearSlots = { GetInventorySlotInfo("FeetSlot") },
+    validGearSlots = { isBag and 20 or (isTwoHand and 19 or GetInventorySlotInfo("FeetSlot")) },
     numValidGearSlots = 1,
   }
 end
 function AutoGearDetermineItemScore(info)
   if info.link and string.find(info.link, "item:1006", 1, true) then
     return 45
+  end
+  if info.link and string.find(info.link, "item:1008", 1, true) then
+    return 50
   end
   return 0
 end
@@ -595,6 +600,36 @@ assert_equals(
   nil,
   "AutoGear source excludes containers"
 )
+local autoGearTwoHandRow = {
+  link = "|cff1eff00|Hitem:1008:0:0:0:0:0:0:0|h[Heavy Axe]|h|r",
+  equipLoc = "INVTYPE_2HWEAPON",
+  itemType = "Weapon",
+  itemSubType = "Two-Handed Axes",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+PawnAuctionSearchDB.slots.MainHandSlot = false
+PawnAuctionSearchDB.slots.SecondaryHandSlot = false
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearTwoHandRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source respects disabled 2H weapon slots"
+)
+PawnAuctionSearchDB.slots.MainHandSlot = true
+PawnAuctionSearchDB.slots.SecondaryHandSlot = true
+AutoGearDetermineItemScore = oldAutoGearScore
+PawnAuctionSearchDB.bestPrice = true
+autoGearBootsRow.minBid = 20000000
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearBootsRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source excludes best-price scores displayed as zero"
+)
+autoGearBootsRow.minBid = 10000
+PawnAuctionSearchDB.bestPrice = false
 AutoGearDetermineItemScore = oldAutoGearScore
 PawnAuctionSearchDB.slots.FeetSlot = false
 assert_equals(

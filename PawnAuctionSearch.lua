@@ -1113,28 +1113,45 @@ function addon:PrepareScoringSource(scaleName)
   return true
 end
 
-function addon:GetSlotNameForId(slotId)
+function addon:GetSlotNamesForAutoGearSlotId(slotId)
+  if slotId == (INVSLOT_TABARD or 19) or slotId == 19 then
+    return { "MainHandSlot", "SecondaryHandSlot" }
+  end
   self.slotNamesById = self.slotNamesById or {}
   if self.slotNamesById[slotId] then
-    return self.slotNamesById[slotId]
+    return { self.slotNamesById[slotId] }
   end
   for slotName in pairs(self.defaults.slots) do
     local id = GetInventorySlotInfo(slotName)
     if id == slotId then
       self.slotNamesById[slotId] = slotName
-      return slotName
+      return { slotName }
     end
   end
   return nil
 end
 
+function addon:IsSupportedAutoGearAuction(row, info)
+  if not info or not info.isGear then
+    return false
+  end
+  if row.itemType == "Container" then
+    return false
+  end
+  return row.equipLoc and self.equipLocSlots[row.equipLoc] ~= nil
+end
+
 function addon:IsAnyAutoGearSlotEnabled(info)
   if not info or not info.validGearSlots then
-    return true
+    return false
   end
   for _, slotId in ipairs(info.validGearSlots) do
-    local slotName = self:GetSlotNameForId(slotId)
-    if not slotName or self:IsSlotEnabled(slotName) then
+    local slotNames = self:GetSlotNamesForAutoGearSlotId(slotId)
+    local enabled = slotNames ~= nil
+    for _, slotName in ipairs(slotNames or {}) do
+      enabled = enabled and self:IsSlotEnabled(slotName)
+    end
+    if enabled then
       return true
     end
   end
@@ -1144,10 +1161,23 @@ end
 function addon:IsDisplayableUpgrade(delta)
   return delta and delta >= self.MIN_DISPLAY_DELTA
 end
+function addon:SetResultScore(row)
+  if self.db and self.db.bestPrice then
+    local price = self:GetPrice(row)
+    if price <= 0 then
+      return false
+    end
+    row.score = (10000 * row.delta) / price
+  else
+    row.score = row.delta
+  end
+  return self:IsDisplayableUpgrade(row.score)
+end
+
 
 function addon:ScoreAutoGearAuction(row)
   local info = AutoGearReadItemInfo(nil, nil, nil, nil, nil, row.link)
-  if not info or info.unusable or not info.isGear or not info.shouldShowScoreInTooltip then
+  if not self:IsSupportedAutoGearAuction(row, info) or not info.shouldShowScoreInTooltip then
     return nil
   end
   if not self:IsAnyAutoGearSlotEnabled(info) then
@@ -1159,17 +1189,8 @@ function addon:ScoreAutoGearAuction(row)
   row.value = (score or 0) + (bestSetScore or 0)
   row.equippedValue = equippedSetScore or 0
   row.delta = row.value - row.equippedValue
-  if not self:IsDisplayableUpgrade(row.delta) then
+  if row.delta <= 0 or not self:SetResultScore(row) then
     return nil
-  end
-  if self.db and self.db.bestPrice then
-    local price = self:GetPrice(row)
-    if price <= 0 then
-      return nil
-    end
-    row.score = (10000 * row.delta) / price
-  else
-    row.score = row.delta
   end
   return row
 end
@@ -1213,18 +1234,8 @@ function addon:ScoreAuction(row, scaleName)
   row.value = candidateValue
   row.equippedValue = equippedValue
   row.delta = row.value - row.equippedValue
-  if not self:IsDisplayableUpgrade(row.delta) then
+  if row.delta <= 0 or not self:SetResultScore(row) then
     return nil
-  end
-
-  if self.db and self.db.bestPrice then
-    local price = self:GetPrice(row)
-    if price <= 0 then
-      return nil
-    end
-    row.score = (10000 * row.delta) / price
-  else
-    row.score = row.delta
   end
   return row
 end
