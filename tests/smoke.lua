@@ -147,11 +147,13 @@ PawnAuctionSearch:InitializeAuctionTab()
 assert_equals(AuctionFrame.numTabs, 4, "AuctionFrame tab count")
 assert_truthy(AuctionFrameTabPawnAuctionSearch, "Pawn unique tab exists")
 assert_equals(AuctionFrameTab4, AuctionFrameTabPawnAuctionSearch, "Pawn indexed tab alias exists")
+AuctionFrameMoneyFrame:Hide()
 assert_equals(AuctionFrameTabPawnAuctionSearch:GetText(), "Pawn", "Pawn tab text")
 PawnAuctionSearch:SelectAuctionTab(AuctionFrameTabPawnAuctionSearch:GetID())
 assert_truthy(PawnAuctionSearch.mainFrame:IsShown(), "Pawn frame shown after selecting tab")
 assert_equals(AuctionFrameMoneyFrame:IsShown(), true, "Pawn tab keeps money frame visible")
 assert_equals(mock.auctionsTabShowing, false, "Pawn tab hides owner chrome")
+AuctionFrameMoneyFrame:Hide()
 AuctionFrameTab_OnClick(AuctionFrameTab1)
 assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden on Browse tab")
 assert_equals(AuctionFrameMoneyFrame:IsShown(), true, "Browse tab restores money frame")
@@ -217,6 +219,11 @@ assert_equals(
   PawnAuctionSearch:GetDisplayScaleLabel("Rogue: assassination"),
   "Rogue: assass.",
   "long scale labels are shortened for display"
+)
+assert_equals(
+  PawnAuctionSearch:GetDisplayScaleLabel("Рога: убийство"),
+  "Рога: убийст.",
+  "localized scale labels are shortened by UTF-8 characters"
 )
 assert_truthy(
   string.len(PawnAuctionSearch:GetDisplayScaleLabel("Death Knight: Unholy")) <= 14,

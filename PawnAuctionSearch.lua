@@ -7,6 +7,7 @@ addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
 addon.ARMOR_DROPDOWN_WIDTH = 130
 addon.LEFT_CONTROLS_TOP_OFFSET = -32
+addon.LEFT_CONTROLS_LEFT_OFFSET = 1
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_STATUS_OFFSET = -200
@@ -505,25 +506,56 @@ function addon:GetScaleLabel(scaleName)
   return scaleName or ""
 end
 
+
+local function utf8Length(text)
+  if strlenutf8 then
+    return strlenutf8(text)
+  end
+  local count = 0
+  for index = 1, string.len(text) do
+    local byte = string.byte(text, index)
+    if byte < 128 or byte >= 192 then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+local function utf8Prefix(text, maxLength)
+  local count = 0
+  local lastByte = 0
+  for index = 1, string.len(text) do
+    local byte = string.byte(text, index)
+    if byte < 128 or byte >= 192 then
+      count = count + 1
+      if count > maxLength then
+        break
+      end
+    end
+    lastByte = index
+  end
+  return string.sub(text, 1, lastByte)
+end
+
 function addon:GetDisplayScaleLabel(label)
   label = label or ""
   local maxLength = 14
-  if string.len(label) <= maxLength then
+  if utf8Length(label) <= maxLength then
     return label
   end
   local separatorStart, separatorEnd = string.find(label, ": ", 1, true)
   if separatorEnd then
     local prefix = string.sub(label, 1, separatorStart - 1)
-    if string.len(prefix) > 6 then
-      prefix = string.sub(prefix, 1, 5) .. "."
+    if utf8Length(prefix) > 6 then
+      prefix = utf8Prefix(prefix, 5) .. "."
     end
-    local suffixLength = maxLength - string.len(prefix) - 3
+    local suffixLength = maxLength - utf8Length(prefix) - 3
     if suffixLength > 0 then
       local suffix = string.sub(label, separatorEnd + 1)
-      return prefix .. ": " .. string.sub(suffix, 1, suffixLength) .. "."
+      return prefix .. ": " .. utf8Prefix(suffix, suffixLength) .. "."
     end
   end
-  return string.sub(label, 1, maxLength - 3) .. "..."
+  return utf8Prefix(label, maxLength - 3) .. "..."
 end
 
 
@@ -569,7 +601,13 @@ end
 
 function addon:CreateScaleSelector(parent)
   local label = parent:CreateFontString("PawnAuctionSearchScaleLabel", "ARTWORK", "GameFontNormal")
-  label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, self.LEFT_CONTROLS_TOP_OFFSET)
+  label:SetPoint(
+    "TOPLEFT",
+    parent,
+    "TOPLEFT",
+    self.LEFT_CONTROLS_LEFT_OFFSET,
+    self.LEFT_CONTROLS_TOP_OFFSET
+  )
   self.scaleLabel = label
   self:AttachHelpTooltip(
     label,
@@ -1253,7 +1291,7 @@ function addon:CreateOptionControls(parent, anchor)
     },
     {
       key = "bestPrice",
-      label = "Adjust score based on price",
+      label = "Adjust based on price",
       tip = "Adjust the score returned by the price of the item.  For similar items, "
         .. "the cheaper item will be higher on the list.",
     },
