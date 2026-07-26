@@ -267,6 +267,19 @@ local resultBottom = 72 - PawnAuctionSearch.RESULTS_TOP_OFFSET + 12 + 8
   + 6
   + PawnAuctionSearch.buyoutButton.height
 assert_truthy(resultBottom <= 447, "result rows and actions stay inside AuctionFrame")
+for _, control in ipairs(PawnAuctionSearch.slotControls) do
+  local titleTop = control.point[2].point[5]
+  local bottom = titleTop + control.point[5] - PawnAuctionSearch.CHECK_BUTTON_SIZE
+  assert_truthy(bottom > PawnAuctionSearch.statusText.point[5], "slot grid clears status")
+end
+local forceTwoHandTitleTop = PawnAuctionSearch.forceTwoHandControl.point[2].point[5]
+local forceTwoHandBottom = forceTwoHandTitleTop
+  + PawnAuctionSearch.forceTwoHandControl.point[5]
+  - PawnAuctionSearch.CHECK_BUTTON_SIZE
+assert_truthy(
+  forceTwoHandBottom > PawnAuctionSearch.statusText.point[5],
+  "force 2H control clears status"
+)
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
 mock.canQuery = false
