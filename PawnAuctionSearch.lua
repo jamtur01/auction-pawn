@@ -6,14 +6,20 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 92
-addon.RESULTS_LEFT_OFFSET = 300
-addon.RESULT_ROW_WIDTH = 430
-addon.RESULT_NAME_WIDTH = 130
-addon.RESULT_DELTA_OFFSET = 140
-addon.RESULT_PRICE_OFFSET = 205
-addon.RESULT_BID_OFFSET = 340
-addon.RESULT_BUYOUT_OFFSET = 385
-addon.SLOT_FILTERS_LEFT_OFFSET = 150
+addon.RESULTS_LEFT_OFFSET = 0
+addon.RESULTS_TOP_OFFSET = -190
+addon.RESULT_ROW_WIDTH = 680
+addon.RESULT_NAME_WIDTH = 200
+addon.RESULT_DELTA_OFFSET = 215
+addon.RESULT_PRICE_OFFSET = 280
+addon.RESULT_BID_OFFSET = 530
+addon.RESULT_BUYOUT_OFFSET = 585
+addon.RESULTS_VISIBLE_ROWS = 12
+addon.RESULT_ROW_HEIGHT = 22
+addon.OPTION_FILTER_ROWS = 3
+addon.OPTION_FILTER_COLUMN_WIDTH = 165
+addon.SLOT_FILTER_ROWS = 5
+addon.SLOT_FILTERS_LEFT_OFFSET = 360
 addon.FAST_SCAN_ROWS_PER_TICK = 250
 addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
@@ -33,8 +39,6 @@ addon.slotFilters = {
   { label = "Main Hand", slots = { "MainHandSlot" } },
   { label = "Off-hand", slots = { "SecondaryHandSlot" } },
   { label = "Ranged", slots = { "RangedSlot" } },
-  { label = "Shirt", slots = { "ShirtSlot" } },
-  { label = "Tabard", slots = { "TabardSlot" } },
 }
 
 addon.defaults = {
@@ -51,14 +55,12 @@ addon.defaults = {
     NeckSlot = true,
     ShoulderSlot = true,
     BackSlot = true,
-    ShirtSlot = true,
     ChestSlot = true,
     WristSlot = true,
     HandsSlot = true,
     WaistSlot = true,
     LegsSlot = true,
     FeetSlot = true,
-    TabardSlot = true,
     Finger0Slot = true,
     Finger1Slot = true,
     Trinket0Slot = true,
@@ -76,13 +78,11 @@ addon.equipLocSlots = {
   INVTYPE_CLOAK = { "BackSlot" },
   INVTYPE_CHEST = { "ChestSlot" },
   INVTYPE_ROBE = { "ChestSlot" },
-  INVTYPE_BODY = { "ShirtSlot" },
   INVTYPE_WRIST = { "WristSlot" },
   INVTYPE_HAND = { "HandsSlot" },
   INVTYPE_WAIST = { "WaistSlot" },
   INVTYPE_LEGS = { "LegsSlot" },
   INVTYPE_FEET = { "FeetSlot" },
-  INVTYPE_TABARD = { "TabardSlot" },
   INVTYPE_FINGER = { "Finger0Slot", "Finger1Slot" },
   INVTYPE_TRINKET = { "Trinket0Slot", "Trinket1Slot" },
   INVTYPE_WEAPON = { "MainHandSlot", "SecondaryHandSlot" },
@@ -103,13 +103,11 @@ addon.slotOptionAliases = {
   ShoulderSlot = "shoulder",
   BackSlot = "back",
   ChestSlot = "chest",
-  ShirtSlot = "shirt",
   WristSlot = "wrist",
   HandsSlot = "hands",
   WaistSlot = "waist",
   LegsSlot = "legs",
   FeetSlot = "feet",
-  TabardSlot = "tabard",
   Finger0Slot = "finger",
   Finger1Slot = "finger",
   Trinket0Slot = "trinket",
@@ -293,6 +291,7 @@ end
 
 function addon:CancelActiveScan(message)
   local wasScanning = self.scanActive or self.fastScanActive or self.fastScanProcessing
+    or self.auctioneerScanProcessing
   if not wasScanning and not self.waitingForQuery and not self.pendingSelection then
     return
   end
@@ -304,6 +303,13 @@ function addon:CancelActiveScan(message)
   self.fastScanNextStatus = nil
   self.fastScanWaitElapsed = nil
   self.fastScanLastStatusSecond = nil
+  self.auctioneerScanProcessing = false
+  self.auctioneerScanImage = nil
+  self.auctioneerScanConst = nil
+  self.auctioneerScanIndex = nil
+  self.auctioneerScanTotal = nil
+  self.auctioneerScanNextStatus = nil
+  self.auctioneerScanApi = nil
   self.waitingForQuery = false
   self.waitingPage = nil
   self.pendingSelection = nil
@@ -519,6 +525,84 @@ function addon:ReadAuctionRow(index)
     texture = itemTexture or texture,
     sellPrice = sellPrice,
     timeLeft = GetAuctionItemTimeLeft("list", index),
+  }
+end
+
+function addon:GetAuctioneerScanApi()
+  local auc = _G.AucAdvanced
+  if not auc or not auc.API or not auc.Const then
+    return nil
+  end
+  if type(auc.API.QueryImage) ~= "function" then
+    return nil
+  end
+  return auc.API, auc.Const
+end
+
+function addon:GetAuctioneerEquipLoc(equipCode)
+  local auc = _G.AucAdvanced
+  local encode = auc and auc.Const and auc.Const.EquipEncode
+  if not encode then
+    return nil
+  end
+  for equipLoc, code in pairs(encode) do
+    if code == equipCode then
+      return equipLoc
+    end
+  end
+  return nil
+end
+
+function addon:ReadAuctioneerRow(item, index, const, api)
+  local unpacked
+  if api and type(api.UnpackImageItem) == "function" then
+    unpacked = api.UnpackImageItem(item, {})
+  end
+  local dataFlag = unpacked and unpacked.dataFlag or item[const.FLAG]
+  local hiddenFlags = (const.FLAG_UNSEEN or 0) + (const.FLAG_FILTER or 0)
+  local band = bit and bit.band or bitand
+  if dataFlag and hiddenFlags > 0 and type(band) == "function" then
+    if band(dataFlag, hiddenFlags) ~= 0 then
+      return nil
+    end
+  end
+
+  local link = unpacked and unpacked.link or item[const.LINK]
+  local itemId = unpacked and unpacked.itemId or item[const.ITEMID]
+  if not link and itemId then
+    link = "item:" .. tostring(itemId)
+  end
+  if not link then
+    return nil
+  end
+
+  local equipCode = unpacked and unpacked.equipPos or item[const.IEQUIP]
+  local itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType,
+    itemSubType, itemStackCount, itemEquipLoc, itemTexture, sellPrice =
+    GetItemInfo(link)
+  return {
+    source = "auctioneer",
+    sourceIndex = index,
+    name = itemName or (unpacked and unpacked.itemName) or item[const.NAME],
+    auctionName = unpacked and unpacked.itemName or item[const.NAME],
+    link = itemLink or link,
+    count = unpacked and unpacked.stackSize or item[const.COUNT],
+    quality = itemRarity or (unpacked and unpacked.quality) or item[const.QUALITY],
+    canUse = unpacked and unpacked.canUse or item[const.CANUSE],
+    level = itemLevel or (unpacked and unpacked.useLevel) or item[const.ULEVEL],
+    minLevel = itemMinLevel,
+    minBid = unpacked and unpacked.minBid or item[const.MINBID] or item[const.PRICE] or 0,
+    minIncrement = unpacked and unpacked.increment or item[const.MININC] or 0,
+    buyoutPrice = unpacked and unpacked.buyoutPrice or item[const.BUYOUT] or 0,
+    bidAmount = unpacked and unpacked.curBid or item[const.CURBID] or 0,
+    owner = unpacked and unpacked.sellerName or item[const.SELLER],
+    itemType = itemType,
+    itemSubType = itemSubType,
+    itemStackCount = itemStackCount,
+    equipLoc = itemEquipLoc or self:GetAuctioneerEquipLoc(equipCode),
+    texture = itemTexture or (unpacked and unpacked.texture),
+    sellPrice = sellPrice,
+    timeLeft = unpacked and unpacked.timeLeft or item[const.TLEFT],
   }
 end
 
@@ -898,15 +982,23 @@ function addon:GetArmorPreferenceLabel()
   return "No Preference"
 end
 
-local function addOptionCheckButton(addon, parent, key, label, index, anchor)
+local function addOptionCheckButton(addon, parent, key, label, index, title)
   local check = CreateFrame(
     "CheckButton",
     "PawnAuctionSearchOption" .. index,
     parent,
     "UICheckButtonTemplate"
   )
+  local column = math.floor((index - 1) / addon.OPTION_FILTER_ROWS)
+  local row = (index - 1) % addon.OPTION_FILTER_ROWS
   check:SetSize(20, 20)
-  check:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4 - ((index - 1) * 20))
+  check:SetPoint(
+    "TOPLEFT",
+    title,
+    "BOTTOMLEFT",
+    column * addon.OPTION_FILTER_COLUMN_WIDTH,
+    -4 - (row * 20)
+  )
   check:SetChecked(addon.db and addon.db[key])
   check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
@@ -978,19 +1070,18 @@ function addon:CreateOptionControls(parent, anchor)
     { key = "unenchanted", label = "Use unenchanted values" },
     { key = "force2h", label = "Only 2H Weapons" },
   }
-  local last = title
   for index, option in ipairs(options) do
-    last = addOptionCheckButton(self, parent, option.key, option.label, index, title)
+    addOptionCheckButton(self, parent, option.key, option.label, index, title)
   end
-  parent.optionsBottom = self:CreateArmorPreferenceSelector(parent, last)
+  local armorAnchor = parent.optionControls[3] or title
+  parent.optionsBottom = self:CreateArmorPreferenceSelector(parent, armorAnchor)
   self.optionControls = parent.optionControls
   return parent.optionControls
 end
 
-
 local function addSlotFilterCheckButton(addon, parent, filter, index, title)
-  local column = math.floor((index - 1) / 9)
-  local row = (index - 1) % 9
+  local column = math.floor((index - 1) / addon.SLOT_FILTER_ROWS)
+  local row = (index - 1) % addon.SLOT_FILTER_ROWS
   local check = CreateFrame(
     "CheckButton",
     "PawnAuctionSearchSlotFilter" .. index,
@@ -998,12 +1089,13 @@ local function addSlotFilterCheckButton(addon, parent, filter, index, title)
     "UICheckButtonTemplate"
   )
   check:SetSize(20, 20)
-  if row == 0 then
-    local xOffset = column * addon.SLOT_FILTER_COLUMN_WIDTH
-    check:SetPoint("TOPLEFT", title, "BOTTOMLEFT", xOffset, -4)
-  else
-    check:SetPoint("TOPLEFT", parent.slotControls[index - 1], "BOTTOMLEFT", 0, -2)
-  end
+  check:SetPoint(
+    "TOPLEFT",
+    title,
+    "BOTTOMLEFT",
+    column * addon.SLOT_FILTER_COLUMN_WIDTH,
+    -4 - (row * 20)
+  )
   check:SetChecked(addon:IsSlotFilterEnabled(filter))
   check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
@@ -1014,7 +1106,7 @@ local function addSlotFilterCheckButton(addon, parent, filter, index, title)
   parent.slotControls[index] = check
 end
 
-function addon:CreateSlotFilters(parent, anchor)
+function addon:CreateSlotFilters(parent)
   if parent.slotControls then
     return parent.slotControls
   end
@@ -1023,7 +1115,7 @@ function addon:CreateSlotFilters(parent, anchor)
     "ARTWORK",
     "GameFontNormal"
   )
-  title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", self.SLOT_FILTERS_LEFT_OFFSET, -10)
+  title:SetPoint("TOPLEFT", parent, "TOPLEFT", self.SLOT_FILTERS_LEFT_OFFSET, -10)
   title:SetText("Slots")
   parent.slotControls = {}
   for index, filter in ipairs(self.slotFilters) do
@@ -1076,9 +1168,10 @@ function addon:CreateResults(parent)
     "ARTWORK",
     "GameFontNormal"
   )
-  header:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -14)
+  header:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, self.RESULTS_TOP_OFFSET)
   header:SetText("Item")
   parent.resultsHeader = header
+  self.resultsHeader = header
 
   local scoreHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   scoreHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_DELTA_OFFSET, 0)
@@ -1088,18 +1181,37 @@ function addon:CreateResults(parent)
   priceHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_PRICE_OFFSET, 0)
   priceHeader:SetText("Price")
 
+  local scrollFrame = CreateFrame(
+    "ScrollFrame",
+    "PawnAuctionSearchResultsScrollFrame",
+    parent,
+    "FauxScrollFrameTemplate"
+  )
+  scrollFrame:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+  scrollFrame:SetSize(
+    self.RESULT_ROW_WIDTH,
+    self.RESULTS_VISIBLE_ROWS * self.RESULT_ROW_HEIGHT
+  )
+  scrollFrame:SetScript("OnVerticalScroll", function(frame, offset)
+    local rowOffset = math.floor((offset or 0) / addon.RESULT_ROW_HEIGHT + 0.5)
+    FauxScrollFrame_SetOffset(frame, rowOffset)
+    addon:UpdateResults()
+  end)
+  parent.resultScrollFrame = scrollFrame
+  self.resultScrollFrame = scrollFrame
+
   local previous
-  for index = 1, 10 do
+  for index = 1, self.RESULTS_VISIBLE_ROWS do
     local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
     row:SetSize(self.RESULT_ROW_WIDTH, 20)
     if previous then
       row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
     else
-      row:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+      row:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
     end
     row:RegisterForClicks("LeftButtonUp")
-    row:SetScript("OnClick", function()
-      addon:SelectResult(index)
+    row:SetScript("OnClick", function(button)
+      addon:SelectResult(button.resultIndex)
     end)
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -1117,15 +1229,15 @@ function addon:CreateResults(parent)
     row.bidButton:SetSize(42, 18)
     row.bidButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_OFFSET, 0)
     row.bidButton:SetText("Bid")
-    row.bidButton:SetScript("OnClick", function()
-      addon:PlaceResultBid(index, false)
+    row.bidButton:SetScript("OnClick", function(button)
+      addon:PlaceResultBid(button.resultIndex, false)
     end)
     row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.buyoutButton:SetSize(46, 18)
     row.buyoutButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_OFFSET, 0)
     row.buyoutButton:SetText("Buy")
-    row.buyoutButton:SetScript("OnClick", function()
-      addon:PlaceResultBid(index, true)
+    row.buyoutButton:SetScript("OnClick", function(button)
+      addon:PlaceResultBid(button.resultIndex, true)
     end)
     row:Hide()
     rows[index] = row
@@ -1167,6 +1279,13 @@ function addon:FinishScan(statusSuffix)
   self.fastScanLastStatusSecond = nil
   self.fastScanIncomplete = false
   self.fastScanSnapshotMarker = nil
+  self.auctioneerScanProcessing = false
+  self.auctioneerScanImage = nil
+  self.auctioneerScanConst = nil
+  self.auctioneerScanIndex = nil
+  self.auctioneerScanTotal = nil
+  self.auctioneerScanNextStatus = nil
+  self.auctioneerScanApi = nil
   local status = "Found " .. tostring(#self.results) .. " upgrade auctions"
   if statusSuffix then
     status = status .. " " .. statusSuffix
@@ -1174,7 +1293,6 @@ function addon:FinishScan(statusSuffix)
   self:SetStatus(status .. ".")
   self:UpdateResults()
 end
-
 function addon:ScoreCachedAuctions()
   if not self.auctionCacheComplete or not self.auctionCacheRows then
     return false
@@ -1186,7 +1304,92 @@ function addon:ScoreCachedAuctions()
       table.insert(self.results, result)
     end
   end
-  self:FinishScan("from cached scan")
+  local suffix = "from cached scan (" .. tostring(#self.auctionCacheRows) .. " auctions rescored)"
+  self:FinishScan(suffix)
+  return true
+end
+
+function addon:SetAuctioneerScanProgress(scanned, total)
+  self:SetStatus(
+    "Auctioneer scan data scoring " .. tostring(scanned) .. " / " .. tostring(total)
+      .. " auctions..."
+  )
+end
+
+function addon:StartAuctioneerScanProcessing(image, const, api)
+  self.results = {}
+  self.auctioneerScanImage = image
+  self.auctioneerScanConst = const
+  self.auctioneerScanApi = api
+  self.auctioneerScanProcessing = true
+  self.auctioneerScanIndex = 1
+  self.auctioneerScanTotal = #image
+  self.auctioneerScanNextStatus = self.FAST_SCAN_STATUS_INTERVAL
+  self:SetAuctioneerScanProgress(0, #image)
+end
+
+function addon:ScoreAuctioneerAuctions()
+  local auc = _G.AucAdvanced
+  local scan = auc and auc.Scan
+  if scan and type(scan.IsPaused) == "function" and scan.IsPaused() then
+    self.scanActive = false
+    self:SetStatus("Auctioneer scanning is paused. Resume Auctioneer, then search again.")
+    return true
+  end
+  if scan and type(scan.IsScanning) == "function" and scan.IsScanning() then
+    self.scanActive = false
+    self:SetStatus("Auctioneer is scanning. Search again after Auctioneer finishes.")
+    return true
+  end
+  local api, const = self:GetAuctioneerScanApi()
+  if not api then
+    return false
+  end
+  local image
+  if type(api.GetImageCopy) == "function" then
+    image = api.GetImageCopy()
+  else
+    image = api.QueryImage({})
+  end
+  if type(image) ~= "table" or #image == 0 then
+    return false
+  end
+  self:StartAuctioneerScanProcessing(image, const, api)
+  return true
+end
+
+function addon:ProcessAuctioneerScanBatch()
+  if not self.auctioneerScanProcessing then
+    return false
+  end
+  local image = self.auctioneerScanImage or {}
+  local const = self.auctioneerScanConst
+  local api = self.auctioneerScanApi
+  local total = self.auctioneerScanTotal or 0
+  local startIndex = self.auctioneerScanIndex or 1
+  local endIndex = math.min(total, startIndex + self.FAST_SCAN_ROWS_PER_TICK - 1)
+  for index = startIndex, endIndex do
+    local row = self:ReadAuctioneerRow(image[index], index, const, api)
+    if row then
+      local result = self:ScoreAuction(row, self.scanScaleName)
+      if result then
+        table.insert(self.results, result)
+      end
+    end
+  end
+  self.auctioneerScanIndex = endIndex + 1
+  if endIndex >= total then
+    local suffix = "from Auctioneer scan data (" .. tostring(total) .. " auctions rescored)"
+    self:FinishScan(suffix)
+    return true
+  end
+  if endIndex >= (self.auctioneerScanNextStatus or 0) then
+    self:SetAuctioneerScanProgress(endIndex, total)
+    repeat
+      self.auctioneerScanNextStatus = (self.auctioneerScanNextStatus or 0)
+        + self.FAST_SCAN_STATUS_INTERVAL
+    until self.auctioneerScanNextStatus > endIndex
+  end
   return true
 end
 
@@ -1360,6 +1563,10 @@ function addon:QueryScanPage()
 end
 
 function addon:OnUpdate(elapsed)
+  if self.auctioneerScanProcessing then
+    self:ProcessAuctioneerScanBatch()
+    return
+  end
   if self.fastScanProcessing then
     self:ProcessFastScanBatch()
     return
@@ -1375,6 +1582,12 @@ function addon:OnUpdate(elapsed)
     self:QueryAuctionPage(self.pendingSelection.page, "Loading selected result page...")
   elseif self.scanActive then
     self:QueryScanPage()
+  end
+end
+
+function addon:ResetResultScroll()
+  if self.resultScrollFrame and FauxScrollFrame_SetOffset then
+    FauxScrollFrame_SetOffset(self.resultScrollFrame, 0)
   end
 end
 
@@ -1396,12 +1609,16 @@ function addon:StartScan()
     return
   end
   self.results = {}
+  self:ResetResultScroll()
   self.scanActive = true
   self.fastScanActive = false
   self.scanPage = 0
   self.scanScaleName = scaleOrMessage
   self:UpdateResults()
 
+  if self:ScoreAuctioneerAuctions() then
+    return
+  end
   if self:ScoreCachedAuctions() then
     return
   end
@@ -1475,19 +1692,43 @@ end
 function addon:UpdateResults()
   self:CreateMainFrame()
   local results = self.results or {}
-  for index = 1, 10 do
-    local row = self.resultRows[index]
-    local result = results[index]
+  local displayRows = self.RESULTS_VISIBLE_ROWS
+  if self.resultScrollFrame and FauxScrollFrame_Update then
+    FauxScrollFrame_Update(
+      self.resultScrollFrame,
+      #results,
+      displayRows,
+      self.RESULT_ROW_HEIGHT
+    )
+  end
+
+  local offset = 0
+  if self.resultScrollFrame and FauxScrollFrame_GetOffset then
+    offset = FauxScrollFrame_GetOffset(self.resultScrollFrame) or 0
+  end
+  for displayIndex = 1, displayRows do
+    local row = self.resultRows[displayIndex]
+    local resultIndex = offset + displayIndex
+    local result = results[resultIndex]
     if result then
-      row.resultIndex = index
+      row.resultIndex = resultIndex
+      row.bidButton.resultIndex = resultIndex
+      row.buyoutButton.resultIndex = resultIndex
       row.nameText:SetText(result.link or result.name or "")
       row.deltaText:SetText(formatScore(result.score))
       row.priceText:SetText(formatResultPrices(self, result))
-      row.bidButton:Show()
-      row.buyoutButton:Show()
+      if result.source == "auctioneer" then
+        row.bidButton:Hide()
+        row.buyoutButton:Hide()
+      else
+        row.bidButton:Show()
+        row.buyoutButton:Show()
+      end
       row:Show()
     else
       row.resultIndex = nil
+      row.bidButton.resultIndex = nil
+      row.buyoutButton.resultIndex = nil
       row.nameText:SetText("")
       row.deltaText:SetText("")
       row.priceText:SetText("")
@@ -1545,6 +1786,10 @@ function addon:PlaceResultBid(resultIndex, buyout)
   if not result then
     return
   end
+  if result.source == "auctioneer" or result.page == nil or result.index == nil then
+    self:SetStatus("Auctioneer scan result is display-only. Run a live scan before bidding.")
+    return
+  end
   if result.page ~= self.currentAuctionPage then
     self.pendingSelection = result
     local message = "Loading result page. Click Bid or Buy again after it loads."
@@ -1591,6 +1836,10 @@ end
 function addon:SelectResult(resultIndex)
   local result = self.results and self.results[resultIndex]
   if not result then
+    return
+  end
+  if result.source == "auctioneer" or result.page == nil or result.index == nil then
+    self:SetStatus("Auctioneer scan result is display-only. Use Auctioneer for purchase actions.")
     return
   end
   if result.page == self.currentAuctionPage and self:SelectCurrentBrowseResult(result) then
