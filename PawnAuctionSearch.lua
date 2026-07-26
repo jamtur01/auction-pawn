@@ -7,6 +7,7 @@ addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
 addon.SCALE_DROPDOWN_PAGE_SIZE = 7
 addon.AUTO_GEAR_SCALE_NAME = "__AUTOGEAR__"
+addon.MIN_DISPLAY_DELTA = 0.005
 addon.ARMOR_DROPDOWN_WIDTH = 130
 addon.LEFT_CONTROLS_TOP_OFFSET = -32
 addon.LEFT_CONTROLS_LEFT_OFFSET = 1
@@ -1140,9 +1141,13 @@ function addon:IsAnyAutoGearSlotEnabled(info)
   return false
 end
 
+function addon:IsDisplayableUpgrade(delta)
+  return delta and delta >= self.MIN_DISPLAY_DELTA
+end
+
 function addon:ScoreAutoGearAuction(row)
   local info = AutoGearReadItemInfo(nil, nil, nil, nil, nil, row.link)
-  if not info or info.unusable or not info.shouldShowScoreInTooltip then
+  if not info or info.unusable or not info.isGear or not info.shouldShowScoreInTooltip then
     return nil
   end
   if not self:IsAnyAutoGearSlotEnabled(info) then
@@ -1154,7 +1159,7 @@ function addon:ScoreAutoGearAuction(row)
   row.value = (score or 0) + (bestSetScore or 0)
   row.equippedValue = equippedSetScore or 0
   row.delta = row.value - row.equippedValue
-  if row.delta <= 0 then
+  if not self:IsDisplayableUpgrade(row.delta) then
     return nil
   end
   if self.db and self.db.bestPrice then
@@ -1208,7 +1213,7 @@ function addon:ScoreAuction(row, scaleName)
   row.value = candidateValue
   row.equippedValue = equippedValue
   row.delta = row.value - row.equippedValue
-  if row.delta <= 0 then
+  if not self:IsDisplayableUpgrade(row.delta) then
     return nil
   end
 

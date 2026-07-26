@@ -263,6 +263,7 @@ local autoGearUpdateCount = 0
 function AutoGearReadItemInfo(inventoryID, lootRollID, container, slot, questRewardIndex, link)
   return {
     link = link,
+    isGear = not (link and string.find(link, "item:1007", 1, true)),
     shouldShowScoreInTooltip = true,
     validGearSlots = { GetInventorySlotInfo("FeetSlot") },
     numValidGearSlots = 1,
@@ -293,7 +294,17 @@ assert_equals(
   "AutoGear source appears after Pawn scales"
 )
 PawnAuctionSearch:SetScale(PawnAuctionSearch.AUTO_GEAR_SCALE_NAME)
-assert_equals(PawnAuctionSearchDB.scaleName, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME, "AutoGear source selected")
+assert_equals(
+  PawnAuctionSearchDB.scaleName,
+  PawnAuctionSearch.AUTO_GEAR_SCALE_NAME,
+  "AutoGear source selected"
+)
+PawnAuctionSearch:EnsureScaleSelected()
+assert_equals(
+  PawnAuctionSearchDB.scaleName,
+  PawnAuctionSearch.AUTO_GEAR_SCALE_NAME,
+  "AutoGear source survives search preparation"
+)
 PawnAuctionSearch:PrepareScoringSource(PawnAuctionSearch.AUTO_GEAR_SCALE_NAME)
 assert_equals(autoGearUpdateCount, 1, "AutoGear equipped scores refresh before scoring")
 PawnAuctionSearch:SetScale("TestScale")
@@ -559,6 +570,30 @@ assert_equals(
   PawnAuctionSearch:ScoreAuction(autoGearBootsRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
   nil,
   "AutoGear source excludes equal-score boots"
+)
+function AutoGearDetermineItemScore(info)
+  return 36.004
+end
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearBootsRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source excludes scores displayed as zero"
+)
+local autoGearBagRow = {
+  link = "|cff1eff00|Hitem:1007:0:0:0:0:0:0:0|h[Small Brown Pouch]|h|r",
+  equipLoc = "INVTYPE_BAG",
+  itemType = "Container",
+  itemSubType = "Bag",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(autoGearBagRow, PawnAuctionSearch.AUTO_GEAR_SCALE_NAME),
+  nil,
+  "AutoGear source excludes containers"
 )
 AutoGearDetermineItemScore = oldAutoGearScore
 PawnAuctionSearchDB.slots.FeetSlot = false
