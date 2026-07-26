@@ -237,6 +237,8 @@ function addon:CancelActiveScan(message)
   self.fastScanProcessIndex = nil
   self.fastScanProcessTotal = nil
   self.fastScanNextStatus = nil
+  self.fastScanWaitElapsed = nil
+  self.fastScanLastStatusSecond = nil
   self.waitingForQuery = false
   self.waitingPage = nil
   self.pendingSelection = nil
@@ -877,6 +879,12 @@ local function copyAuctionRow(row)
   return copy
 end
 
+local function formatDuration(seconds)
+  local minutes = math.floor(seconds / 60)
+  local remainder = seconds - minutes * 60
+  return string.format("%d:%02d", minutes, remainder)
+end
+
 function addon:FinishScan(statusSuffix)
   table.sort(self.results, sortByScore)
   self.scanActive = false
@@ -885,6 +893,8 @@ function addon:FinishScan(statusSuffix)
   self.fastScanProcessIndex = nil
   self.fastScanProcessTotal = nil
   self.fastScanNextStatus = nil
+  self.fastScanWaitElapsed = nil
+  self.fastScanLastStatusSecond = nil
   local status = "Found " .. tostring(#self.results) .. " upgrade auctions"
   if statusSuffix then
     status = status .. " " .. statusSuffix
@@ -916,13 +926,28 @@ function addon:QueryFastScan()
   self.waitingForQuery = false
   self.waitingPage = nil
   self.fastScanActive = true
+  self.fastScanWaitElapsed = 0
+  self.fastScanLastStatusSecond = nil
   self.currentQueryPage = 0
   self.currentAuctionPage = 0
   self.auctionCacheRows = {}
   self.auctionCacheComplete = false
   QueryAuctionItems("", "", "", nil, nil, nil, 0, false, -1, true)
-  self:SetStatus("Fast scanning auction house...")
+  self:SetFastScanWaitingStatus(0)
   return true
+end
+
+function addon:SetFastScanWaitingStatus(seconds)
+  self.fastScanLastStatusSecond = seconds
+  self:SetStatus("Fast scan request sent. Waiting for server (" .. formatDuration(seconds) .. ")...")
+end
+
+function addon:UpdateFastScanWaitingStatus(elapsed)
+  self.fastScanWaitElapsed = (self.fastScanWaitElapsed or 0) + (elapsed or 0)
+  local seconds = math.floor(self.fastScanWaitElapsed)
+  if seconds ~= self.fastScanLastStatusSecond then
+    self:SetFastScanWaitingStatus(seconds)
+  end
 end
 
 function addon:SetFastScanProgress(scanned, total)
@@ -1005,9 +1030,13 @@ function addon:QueryScanPage()
   )
 end
 
-function addon:OnUpdate()
+function addon:OnUpdate(elapsed)
   if self.fastScanProcessing then
     self:ProcessFastScanBatch()
+    return
+  end
+  if self.fastScanActive then
+    self:UpdateFastScanWaitingStatus(elapsed)
     return
   end
   if not self.waitingForQuery then

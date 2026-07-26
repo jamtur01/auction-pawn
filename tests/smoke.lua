@@ -170,6 +170,17 @@ PawnAuctionSearchDB.scaleName = ""
 mock.canQueryAll = true
 
 start_scan(PawnAuctionSearch)
+assert_equals(
+  PawnAuctionSearch.statusText.text,
+  "Fast scan request sent. Waiting for server (0:00)...",
+  "fast scan waiting starts"
+)
+PawnAuctionSearch:OnUpdate(65)
+assert_equals(
+  PawnAuctionSearch.statusText.text,
+  "Fast scan request sent. Waiting for server (1:05)...",
+  "fast scan waiting timer"
+)
 fire_auction_update(PawnAuctionSearch)
 assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 2 auctions...", "fast scan progress starts")
 finish_fast_scan_processing(PawnAuctionSearch)
