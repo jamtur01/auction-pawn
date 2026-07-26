@@ -3,6 +3,7 @@
 ## Notes: Finds Auction House equipment upgrades using Pawn scales.
 ## Author: Xit_Draka, ShadowVall, mgotovtsev, James Turnbull
 ## Dependencies: Pawn
+## OptionalDeps: AutoGear
 ## SavedVariablesPerCharacter: PawnAuctionSearchDB
 ## Version: 0.1.0
 

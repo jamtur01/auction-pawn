@@ -6,6 +6,7 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
 addon.SCALE_DROPDOWN_PAGE_SIZE = 7
+addon.AUTO_GEAR_SCALE_NAME = "__AUTOGEAR__"
 addon.ARMOR_DROPDOWN_WIDTH = 130
 addon.LEFT_CONTROLS_TOP_OFFSET = -32
 addon.LEFT_CONTROLS_LEFT_OFFSET = 1
@@ -482,19 +483,35 @@ function addon:InitializeAuctionTab()
   self:CreateMainFrame()
 end
 
-function addon:GetScales()
-  if not pawnIsReady() then
-    return {}
-  end
+function addon:IsAutoGearReady()
+  return type(AutoGearReadItemInfo) == "function"
+    and type(AutoGearDetermineItemScore) == "function"
+    and type(AutoGearGetBestSetItems) == "function"
+    and type(AutoGearGetTooltipScoreComparisonInfo) == "function"
+    and type(AutoGearUpdateEquippedItems) == "function"
+end
 
+function addon:IsAutoGearScale(scaleName)
+  return scaleName == self.AUTO_GEAR_SCALE_NAME
+end
+
+function addon:GetScales()
   local scales = {}
-  for _, scale in pairs(PawnGetAllScalesEx() or {}) do
-    if scaleIsVisible(scale) and scale.Name then
-      table.insert(scales, {
-        name = scale.Name,
-        label = scale.LocalizedName or scale.Name,
-      })
+  if pawnIsReady() then
+    for _, scale in pairs(PawnGetAllScalesEx() or {}) do
+      if scaleIsVisible(scale) and scale.Name then
+        table.insert(scales, {
+          name = scale.Name,
+          label = scale.LocalizedName or scale.Name,
+        })
+      end
     end
+  end
+  if self:IsAutoGearReady() then
+    table.insert(scales, {
+      name = self.AUTO_GEAR_SCALE_NAME,
+      label = "AutoGear",
+    })
   end
   return scales
 end
@@ -697,11 +714,17 @@ end
 
 function addon:ValidateScale(scaleName)
   scaleName = scaleName or (self.db and self.db.scaleName)
+  if type(scaleName) ~= "string" or scaleName == "" then
+    return false, "Choose a Pawn scale or AutoGear before searching."
+  end
+  if self:IsAutoGearScale(scaleName) then
+    if self:IsAutoGearReady() then
+      return true, scaleName
+    end
+    return false, "AutoGear is not installed or is not ready yet."
+  end
   if not pawnIsReady() then
     return false, "Pawn is not installed or is not ready yet."
-  end
-  if type(scaleName) ~= "string" or scaleName == "" then
-    return false, "Choose a Pawn scale before searching."
   end
   if not PawnDoesScaleExist(scaleName) then
     return false, "Pawn scale '" .. scaleName .. "' does not exist."
@@ -1079,6 +1102,71 @@ function addon:GetEquippedComparisonValue(slots, scaleName, mode)
   return value
 end
 
+function addon:PrepareScoringSource(scaleName)
+  if not self:IsAutoGearScale(scaleName) then
+    return true
+  end
+  AutoGearUpdateEquippedItems()
+  return true
+end
+
+function addon:GetSlotNameForId(slotId)
+  self.slotNamesById = self.slotNamesById or {}
+  if self.slotNamesById[slotId] then
+    return self.slotNamesById[slotId]
+  end
+  for slotName in pairs(self.defaults.slots) do
+    local id = GetInventorySlotInfo(slotName)
+    if id == slotId then
+      self.slotNamesById[slotId] = slotName
+      return slotName
+    end
+  end
+  return nil
+end
+
+function addon:IsAnyAutoGearSlotEnabled(info)
+  if not info or not info.validGearSlots then
+    return true
+  end
+  for _, slotId in ipairs(info.validGearSlots) do
+    local slotName = self:GetSlotNameForId(slotId)
+    if not slotName or self:IsSlotEnabled(slotName) then
+      return true
+    end
+  end
+  return false
+end
+
+function addon:ScoreAutoGearAuction(row)
+  local info = AutoGearReadItemInfo(nil, nil, nil, nil, nil, row.link)
+  if not info or info.unusable or not info.shouldShowScoreInTooltip then
+    return nil
+  end
+  if not self:IsAnyAutoGearSlotEnabled(info) then
+    return nil
+  end
+  local score = AutoGearDetermineItemScore(info)
+  local _, bestSetScore = AutoGearGetBestSetItems(info)
+  local _, _, _, equippedSetScore = AutoGearGetTooltipScoreComparisonInfo(info, false)
+  row.value = (score or 0) + (bestSetScore or 0)
+  row.equippedValue = equippedSetScore or 0
+  row.delta = row.value - row.equippedValue
+  if row.delta <= 0 then
+    return nil
+  end
+  if self.db and self.db.bestPrice then
+    local price = self:GetPrice(row)
+    if price <= 0 then
+      return nil
+    end
+    row.score = (10000 * row.delta) / price
+  else
+    row.score = row.delta
+  end
+  return row
+end
+
 function addon:ScoreAuction(row, scaleName)
   if not row or not row.link or not row.equipLoc or row.equipLoc == "" then
     return nil
@@ -1097,6 +1185,9 @@ function addon:ScoreAuction(row, scaleName)
   end
   if not self:MatchesArmorPreference(row) then
     return nil
+  end
+  if self:IsAutoGearScale(scaleName) then
+    return self:ScoreAutoGearAuction(row)
   end
 
   local slots, mode = self:GetComparisonSlots(row)
@@ -2096,6 +2187,7 @@ function addon:StartScan()
   self.fastScanActive = false
   self.scanPage = 0
   self.scanScaleName = scaleOrMessage
+  self:PrepareScoringSource(self.scanScaleName)
   self:UpdateResults()
 
   if self:ScoreAuctioneerAuctions() then
