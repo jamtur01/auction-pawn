@@ -944,10 +944,10 @@ function addon:StartScan()
   self.scanScaleName = scaleOrMessage
   self:UpdateResults()
 
-  if self:QueryFastScan() then
+  if self:ScoreCachedAuctions() then
     return
   end
-  if self:ScoreCachedAuctions() then
+  if self:QueryFastScan() then
     return
   end
   self.auctionCacheRows = {}

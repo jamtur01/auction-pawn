@@ -208,6 +208,9 @@ fire_auction_update(PawnAuctionSearch)
 assert_equals(#get_results(PawnAuctionSearch), 1, "paginated upgrade count")
 assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "paginated result")
 
+PawnAuctionSearch.auctionCacheRows = nil
+PawnAuctionSearch.auctionCacheComplete = false
+
 mock.canQueryAll = true
 mock.lastAuctionQuery = nil
 mock.currentPage = 0
@@ -224,6 +227,12 @@ assert_equals(mock.lastAuctionQuery[7], 1, "fast scan selection page requery")
 assert_equals(_G.selectedAuction, nil, "fast scan selection waits for requery")
 fire_auction_update(PawnAuctionSearch)
 assert_equals(_G.selectedAuction, 1, "fast scan page-local auction selected")
+
+mock.canQueryAll = true
+mock.lastAuctionQuery = nil
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery, nil, "complete cache avoids available fast scan")
+assert_equals(#get_results(PawnAuctionSearch), 1, "complete cache rescore count")
 
 
 mock.canQueryAll = false
