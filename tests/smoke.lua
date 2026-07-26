@@ -150,7 +150,7 @@ assert_equals(AuctionFrameTab4, AuctionFrameTabPawnAuctionSearch, "Pawn indexed 
 assert_equals(AuctionFrameTabPawnAuctionSearch:GetText(), "Pawn", "Pawn tab text")
 PawnAuctionSearch:SelectAuctionTab(AuctionFrameTabPawnAuctionSearch:GetID())
 assert_truthy(PawnAuctionSearch.mainFrame:IsShown(), "Pawn frame shown after selecting tab")
-assert_equals(AuctionFrameMoneyFrame:IsShown(), false, "Pawn tab hides money frame")
+assert_equals(AuctionFrameMoneyFrame:IsShown(), true, "Pawn tab keeps money frame visible")
 assert_equals(mock.auctionsTabShowing, false, "Pawn tab hides owner chrome")
 AuctionFrameTab_OnClick(AuctionFrameTab1)
 assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden on Browse tab")
@@ -196,6 +196,11 @@ assert_equals(
   PawnAuctionSearch.scaleDropDown.width,
   PawnAuctionSearch.SCALE_DROPDOWN_WIDTH,
   "scale dropdown width"
+)
+assert_equals(
+  PawnAuctionSearch.scaleLabel.point[5],
+  PawnAuctionSearch.LEFT_CONTROLS_TOP_OFFSET,
+  "scale header starts below top frame edge"
 )
 assert_equals(
   PawnAuctionSearch.armorDropDown.width,
@@ -291,6 +296,7 @@ assert_equals(
   "BOTTOMRIGHT",
   "Close action anchors to visible bottom edge"
 )
+assert_equals(PawnAuctionSearch.closeButton.point[4], 12, "Close action fills right gap")
 assert_equals(PawnAuctionSearch.closeButton.point[5], -26, "Close action sits in bottom row")
 assert_equals(
   PawnAuctionSearch.buyoutButton.point[2],
@@ -785,7 +791,11 @@ assert_equals(
 )
 assert_equals(PawnAuctionSearch.bidButton.shown, true, "Auctioneer Bid action visible")
 assert_equals(PawnAuctionSearch.buyoutButton.shown, true, "Auctioneer Buyout action visible")
-assert_equals(PawnAuctionSearch.bidButton.enabled, false, "Auctioneer Bid disabled before selection")
+assert_equals(
+  PawnAuctionSearch.bidButton.enabled,
+  false,
+  "Auctioneer Bid disabled before selection"
+)
 assert_equals(
   PawnAuctionSearch.buyoutButton.enabled,
   false,

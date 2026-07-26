@@ -6,6 +6,7 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
 addon.ARMOR_DROPDOWN_WIDTH = 130
+addon.LEFT_CONTROLS_TOP_OFFSET = -12
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_STATUS_OFFSET = -185
@@ -18,9 +19,9 @@ addon.RESULT_BUYOUT_PRICE_OFFSET = 340
 addon.ACTION_BUTTON_WIDTH = 80
 addon.ACTION_BUTTON_HEIGHT = 22
 addon.RESULTS_VISIBLE_ROWS = 2
-addon.RESULT_ROW_HEIGHT = 37
+addon.RESULT_ROW_HEIGHT = 30
 addon.OPTION_FILTER_ROWS = 6
-addon.SLOT_FILTERS_TOP_OFFSET = -24
+addon.SLOT_FILTERS_TOP_OFFSET = -32
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
 addon.SLOT_FILTER_ROWS = 6
 addon.SLOT_FILTERS_LEFT_OFFSET = 280
@@ -319,7 +320,7 @@ end
 
 function addon:PrepareAuctionFrameChrome()
   if AuctionFrameMoneyFrame then
-    AuctionFrameMoneyFrame:Hide()
+    AuctionFrameMoneyFrame:Show()
   end
   if SetAuctionsTabShowing then
     SetAuctionsTabShowing(false)
@@ -557,7 +558,7 @@ end
 
 function addon:CreateScaleSelector(parent)
   local label = parent:CreateFontString("PawnAuctionSearchScaleLabel", "ARTWORK", "GameFontNormal")
-  label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+  label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, self.LEFT_CONTROLS_TOP_OFFSET)
   self.scaleLabel = label
   self:AttachHelpTooltip(
     label,
@@ -1434,7 +1435,7 @@ function addon:CreateResults(parent)
     parent,
     "FauxScrollFrameTemplate"
   )
-  scrollFrame:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
+  scrollFrame:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
   scrollFrame:SetSize(
     self.RESULT_ROW_WIDTH,
     self.RESULTS_VISIBLE_ROWS * self.RESULT_ROW_HEIGHT
@@ -1529,7 +1530,7 @@ function addon:CreateResults(parent)
   )
   bidAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
 
-  closeAction:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, -26)
+  closeAction:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 12, -26)
   closeAction:SetText("Close")
   closeAction:SetScript("OnClick", function()
     if HideUIPanel then
