@@ -1,0 +1,10 @@
+## Interface: 30300
+## Title: Pawn Auction Search
+## Notes: Finds Auction House equipment upgrades using Pawn scales.
+## Author: Xit_Draka, ShadowVall, mgotovtsev, James Turnbull
+## Dependencies: Pawn
+## SavedVariablesPerCharacter: PawnAuctionSearchDB
+## Version: 0.1.0
+
+Localization\Localization.xml
+PawnAuctionSearch.xml
