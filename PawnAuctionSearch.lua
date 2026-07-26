@@ -6,13 +6,14 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 92
-addon.RESULTS_LEFT_OFFSET = 230
-addon.RESULT_ROW_WIDTH = 520
-addon.RESULT_NAME_WIDTH = 200
-addon.RESULT_DELTA_OFFSET = 210
-addon.RESULT_PRICE_OFFSET = 280
-addon.RESULT_BID_OFFSET = 420
-addon.RESULT_BUYOUT_OFFSET = 470
+addon.RESULTS_LEFT_OFFSET = 300
+addon.RESULT_ROW_WIDTH = 430
+addon.RESULT_NAME_WIDTH = 130
+addon.RESULT_DELTA_OFFSET = 140
+addon.RESULT_PRICE_OFFSET = 205
+addon.RESULT_BID_OFFSET = 340
+addon.RESULT_BUYOUT_OFFSET = 385
+addon.SLOT_FILTERS_LEFT_OFFSET = 150
 addon.FAST_SCAN_ROWS_PER_TICK = 250
 addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
@@ -118,6 +119,55 @@ addon.slotOptionAliases = {
   RangedSlot = "ranged",
 }
 
+local function localizedGlobal(fallback, ...)
+  for index = 1, select("#", ...) do
+    local value = _G[select(index, ...)]
+    if type(value) == "string" and value ~= "" then
+      return value
+    end
+  end
+  return fallback
+end
+
+addon.armorPreferenceOptions = {
+  { key = "", label = "No Preference", names = {} },
+  {
+    key = "cloth",
+    label = localizedGlobal("Cloth", "ITEM_SUB_CLASS_4_1", "ARMOR_SUBCLASS_CLOTH"),
+    names = { "Cloth", localizedGlobal("Cloth", "ITEM_SUB_CLASS_4_1", "ARMOR_SUBCLASS_CLOTH") },
+  },
+  {
+    key = "leather",
+    label = localizedGlobal("Leather", "ITEM_SUB_CLASS_4_2", "ARMOR_SUBCLASS_LEATHER"),
+    names = {
+      "Leather",
+      localizedGlobal("Leather", "ITEM_SUB_CLASS_4_2", "ARMOR_SUBCLASS_LEATHER"),
+    },
+  },
+  {
+    key = "mail",
+    label = localizedGlobal("Mail", "ITEM_SUB_CLASS_4_3", "ARMOR_SUBCLASS_MAIL"),
+    names = { "Mail", localizedGlobal("Mail", "ITEM_SUB_CLASS_4_3", "ARMOR_SUBCLASS_MAIL") },
+  },
+  {
+    key = "plate",
+    label = localizedGlobal("Plate", "ITEM_SUB_CLASS_4_4", "ARMOR_SUBCLASS_PLATE"),
+    names = { "Plate", localizedGlobal("Plate", "ITEM_SUB_CLASS_4_4", "ARMOR_SUBCLASS_PLATE") },
+  },
+}
+
+addon.armorPreferenceEquipLocs = {
+  INVTYPE_HEAD = true,
+  INVTYPE_SHOULDER = true,
+  INVTYPE_CHEST = true,
+  INVTYPE_ROBE = true,
+  INVTYPE_WRIST = true,
+  INVTYPE_HAND = true,
+  INVTYPE_WAIST = true,
+  INVTYPE_LEGS = true,
+  INVTYPE_FEET = true,
+}
+
 local function pawnIsReady()
   if type(PawnGetAllScalesEx) ~= "function" or type(PawnDoesScaleExist) ~= "function" then
     return false
@@ -200,6 +250,18 @@ addon.CopyDefaults = copyDefaults
 
 function addon:NormalizeOptions(saved, hadSlots)
   normalizeSlotOptions(saved, self.defaults, self.slotOptionAliases, hadSlots)
+  if saved.armorPreference == "No Preference" then
+    saved.armorPreference = ""
+  elseif type(saved.armorPreference) == "string" then
+    local lower = string.lower(saved.armorPreference)
+    for _, option in ipairs(self.armorPreferenceOptions) do
+      if lower == string.lower(option.label) or lower == option.key then
+        saved.armorPreference = option.key
+        return
+      end
+    end
+    saved.armorPreference = ""
+  end
 end
 
 function addon:Print(message)
@@ -533,26 +595,32 @@ function addon:IsAffordable(row)
   end
   return self:GetPrice(row) <= GetMoney()
 end
-
 function addon:MatchesForceTwoHand(row)
   if not self.db or not self.db.force2h then
     return true
   end
-  if row.itemType ~= "Weapon" then
-    return true
-  end
-  return row.equipLoc == "INVTYPE_2HWEAPON"
+  local equipLoc = row and row.equipLoc
+  return equipLoc ~= "INVTYPE_WEAPON"
+    and equipLoc ~= "INVTYPE_WEAPONMAINHAND"
+    and equipLoc ~= "INVTYPE_WEAPONOFFHAND"
 end
 
 function addon:MatchesArmorPreference(row)
   local preference = self.db and self.db.armorPreference or ""
-  if preference == "" or row.itemType ~= "Armor" then
+  if preference == "" or not row or not self.armorPreferenceEquipLocs[row.equipLoc] then
     return true
   end
-  if row.itemSubType == "Miscellaneous" or row.itemSubType == "Shields" then
-    return true
+  for _, option in ipairs(self.armorPreferenceOptions) do
+    if option.key == preference then
+      for _, name in ipairs(option.names) do
+        if row.itemSubType == name then
+          return true
+        end
+      end
+      return false
+    end
   end
-  return row.itemSubType == preference
+  return true
 end
 
 function addon:IsSlotEnabled(slotName)
@@ -774,12 +842,22 @@ local function formatScore(score)
   return string.format("+%.2f", score or 0)
 end
 
+local function formatResultPrices(addon, result)
+  local bid = formatCopper(addon:GetBidPrice(result))
+  local buyout = addon:GetBuyoutPrice(result)
+  if buyout and buyout > 0 then
+    return "Bid " .. bid .. " / Buy " .. formatCopper(buyout)
+  end
+  return "Bid " .. bid .. " / No buyout"
+end
+
 local function sortByScore(left, right)
   return (left.score or 0) > (right.score or 0)
 end
 
 function addon:SelectAuctionTab(index)
   if index ~= 4 then
+    self:CancelActiveScan("Auction tab changed; scan canceled.")
     self:HideMainFrame()
     if AuctionFrameTab_OnClick then
       AuctionFrameTab_OnClick(_G["AuctionFrameTab" .. tostring(index)])
@@ -815,14 +893,21 @@ end
 
 function addon:GetArmorPreferenceLabel()
   local preference = self.db and self.db.armorPreference or ""
-  if preference == "" then
-    return "No Preference"
+  for _, option in ipairs(self.armorPreferenceOptions) do
+    if option.key == preference then
+      return option.label
+    end
   end
-  return preference
+  return "No Preference"
 end
 
 local function addOptionCheckButton(addon, parent, key, label, index, anchor)
-  local check = CreateFrame("CheckButton", "PawnAuctionSearchOption" .. index, parent, "UICheckButtonTemplate")
+  local check = CreateFrame(
+    "CheckButton",
+    "PawnAuctionSearchOption" .. index,
+    parent,
+    "UICheckButtonTemplate"
+  )
   check:SetSize(20, 20)
   check:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4 - ((index - 1) * 20))
   check:SetChecked(addon.db and addon.db[key])
@@ -837,7 +922,11 @@ local function addOptionCheckButton(addon, parent, key, label, index, anchor)
 end
 
 function addon:CreateArmorPreferenceSelector(parent, anchor)
-  local label = parent:CreateFontString("PawnAuctionSearchArmorPreferenceLabel", "ARTWORK", "GameFontNormal")
+  local label = parent:CreateFontString(
+    "PawnAuctionSearchArmorPreferenceLabel",
+    "ARTWORK",
+    "GameFontNormal"
+  )
   label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
   label:SetText("Armor Preference")
 
@@ -854,13 +943,12 @@ function addon:CreateArmorPreferenceSelector(parent, anchor)
   end
   if UIDropDownMenu_Initialize then
     UIDropDownMenu_Initialize(dropdown, function()
-      local options = { "", "Cloth", "Leather", "Mail", "Plate" }
-      for _, option in ipairs(options) do
+      for _, option in ipairs(addon.armorPreferenceOptions) do
         local info = UIDropDownMenu_CreateInfo()
-        info.text = option == "" and "No Preference" or option
-        info.value = option
+        info.text = option.label
+        info.value = option.key
         info.func = function()
-          addon:SetArmorPreference(option)
+          addon:SetArmorPreference(option.key)
         end
         UIDropDownMenu_AddButton(info)
       end
@@ -877,7 +965,11 @@ function addon:CreateOptionControls(parent, anchor)
     return parent.optionControls
   end
   self.db = self:EnsureDatabase()
-  local title = parent:CreateFontString("PawnAuctionSearchOptionsTitle", "ARTWORK", "GameFontNormal")
+  local title = parent:CreateFontString(
+    "PawnAuctionSearchOptionsTitle",
+    "ARTWORK",
+    "GameFontNormal"
+  )
   title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
   title:SetText("Options")
   parent.optionControls = {}
@@ -934,7 +1026,7 @@ function addon:CreateSlotFilters(parent, anchor)
     "ARTWORK",
     "GameFontNormal"
   )
-  title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -12)
+  title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", self.SLOT_FILTERS_LEFT_OFFSET, -10)
   title:SetText("Slots")
   parent.slotControls = {}
   for index, filter in ipairs(self.slotFilters) do
@@ -971,7 +1063,7 @@ function addon:CreateMainFrame()
   frame.searchButton = button
 
   self:CreateOptionControls(frame, button)
-  self:CreateSlotFilters(frame, frame.optionsBottom or button)
+  self:CreateSlotFilters(frame, button)
   self.resultRows = self:CreateResults(frame)
   self.mainFrame = frame
   return frame
@@ -982,7 +1074,11 @@ function addon:CreateResults(parent)
     return self.resultRows
   end
   local rows = {}
-  local header = parent:CreateFontString("PawnAuctionSearchResultsHeader", "ARTWORK", "GameFontNormal")
+  local header = parent:CreateFontString(
+    "PawnAuctionSearchResultsHeader",
+    "ARTWORK",
+    "GameFontNormal"
+  )
   header:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -14)
   header:SetText("Item")
   parent.resultsHeader = header
@@ -1019,7 +1115,7 @@ function addon:CreateResults(parent)
     end
     row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
-    row.priceText:SetWidth(130)
+    row.priceText:SetWidth(125)
     row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.bidButton:SetSize(42, 18)
     row.bidButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_OFFSET, 0)
@@ -1072,6 +1168,8 @@ function addon:FinishScan(statusSuffix)
   self.fastScanNextStatus = nil
   self.fastScanWaitElapsed = nil
   self.fastScanLastStatusSecond = nil
+  self.fastScanIncomplete = false
+  self.fastScanSnapshotMarker = nil
   local status = "Found " .. tostring(#self.results) .. " upgrade auctions"
   if statusSuffix then
     status = status .. " " .. statusSuffix
@@ -1109,6 +1207,7 @@ function addon:QueryFastScan()
   self.currentAuctionPage = 0
   self.auctionCacheRows = {}
   self.auctionCacheComplete = false
+  self.fastScanIncomplete = false
   QueryAuctionItems("", "", "", nil, nil, nil, 0, false, -1, true)
   self:SetFastScanWaitingStatus(0)
   return true
@@ -1116,7 +1215,8 @@ end
 
 function addon:SetFastScanWaitingStatus(seconds)
   self.fastScanLastStatusSecond = seconds
-  self:SetStatus("Fast scan request sent. Waiting for server (" .. formatDuration(seconds) .. ")...")
+  local status = "Fast scan request sent. Waiting for server (" .. formatDuration(seconds) .. ")..."
+  self:SetStatus(status)
 end
 
 function addon:UpdateFastScanWaitingStatus(elapsed)
@@ -1141,7 +1241,56 @@ function addon:StartFastScanProcessing(count)
   self.fastScanProcessIndex = 1
   self.fastScanProcessTotal = count
   self.fastScanNextStatus = self.FAST_SCAN_STATUS_INTERVAL
+  self.fastScanIncomplete = false
+  self.fastScanSnapshotMarker = self:GetAuctionSnapshotMarker(count)
   self:SetFastScanProgress(0, count)
+end
+
+function addon:HashSnapshotValue(hash, value)
+  local text = tostring(value or "")
+  for index = 1, string.len(text) do
+    hash = (hash * 33 + string.byte(text, index)) % 1000000007
+  end
+  return (hash * 33 + 1) % 1000000007
+end
+
+function addon:GetAuctionSnapshotMarker(count)
+  if not count or count <= 0 then
+    return "0:0"
+  end
+  local hash = count
+  for index = 1, count do
+    local name, _, _, _, _, _, minBid, _, buyout, bid, _, owner = GetAuctionItemInfo("list", index)
+    hash = self:HashSnapshotValue(hash, GetAuctionItemLink("list", index))
+    hash = self:HashSnapshotValue(hash, name)
+    hash = self:HashSnapshotValue(hash, minBid)
+    hash = self:HashSnapshotValue(hash, buyout)
+    hash = self:HashSnapshotValue(hash, bid)
+    hash = self:HashSnapshotValue(hash, owner)
+  end
+  return tostring(count) .. ":" .. tostring(hash)
+end
+
+function addon:IsCompleteAuctionRow(row)
+  return row and row.link and row.name and row.itemType ~= nil and row.equipLoc ~= nil
+end
+
+function addon:AbortIncompleteFastScan(message)
+  self.results = {}
+  self.scanActive = false
+  self.fastScanActive = false
+  self.fastScanProcessing = false
+  self.fastScanProcessIndex = nil
+  self.fastScanProcessTotal = nil
+  self.fastScanNextStatus = nil
+  self.fastScanWaitElapsed = nil
+  self.fastScanLastStatusSecond = nil
+  self.fastScanIncomplete = false
+  self.fastScanSnapshotMarker = nil
+  self.auctionCacheRows = nil
+  self.auctionCacheComplete = false
+  self:SetStatus(message)
+  self:UpdateResults()
 end
 
 function addon:ProcessFastScanBatch()
@@ -1154,7 +1303,9 @@ function addon:ProcessFastScanBatch()
   local endIndex = math.min(total, startIndex + self.FAST_SCAN_ROWS_PER_TICK - 1)
   for index = startIndex, endIndex do
     local row = self:ReadAuctionRow(index)
-    if row then
+    if not self:IsCompleteAuctionRow(row) then
+      self.fastScanIncomplete = true
+    else
       table.insert(self.auctionCacheRows, copyAuctionRow(row))
       local result = self:ScoreAuction(row, self.scanScaleName)
       if result then
@@ -1165,6 +1316,10 @@ function addon:ProcessFastScanBatch()
 
   self.fastScanProcessIndex = endIndex + 1
   if endIndex >= total then
+    if self.fastScanIncomplete then
+      self:AbortIncompleteFastScan("Fast scan incomplete; item data is still loading. Try again.")
+      return true
+    end
     self.auctionCacheComplete = true
     self:FinishScan("from fast scan")
     return true
@@ -1270,6 +1425,15 @@ function addon:OnAuctionItemListUpdate()
     return
   end
   if self.fastScanProcessing then
+    local count, total = GetNumAuctionItems("list")
+    local marker = self:GetAuctionSnapshotMarker(count or 0)
+    local sameSnapshot = count == total
+      and total == self.fastScanProcessTotal
+      and marker == self.fastScanSnapshotMarker
+    if sameSnapshot then
+      return
+    end
+    self:AbortIncompleteFastScan("Auction list changed; fast scan canceled.")
     return
   end
   if not self.scanActive then
@@ -1321,7 +1485,7 @@ function addon:UpdateResults()
       row.resultIndex = index
       row.nameText:SetText(result.link or result.name or "")
       row.deltaText:SetText(formatScore(result.score))
-      row.priceText:SetText(formatCopper(self:GetPrice(result)))
+      row.priceText:SetText(formatResultPrices(self, result))
       row.bidButton:Show()
       row.buyoutButton:Show()
       row:Show()
@@ -1386,7 +1550,8 @@ function addon:PlaceResultBid(resultIndex, buyout)
   end
   if result.page ~= self.currentAuctionPage then
     self.pendingSelection = result
-    self:QueryAuctionPage(result.page, "Loading result page. Click Bid or Buy again after it loads.")
+    local message = "Loading result page. Click Bid or Buy again after it loads."
+    self:QueryAuctionPage(result.page, message)
     return
   end
   local index = result.index

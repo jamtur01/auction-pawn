@@ -161,8 +161,16 @@ assert_equals(
   PawnAuctionSearch.SCALE_DROPDOWN_WIDTH,
   "scale dropdown width"
 )
-assert_equals(#PawnAuctionSearch.slotControls, #PawnAuctionSearch.slotFilters, "slot control count")
-assert_equals(PawnAuctionSearch.resultRows[1].width, PawnAuctionSearch.RESULT_ROW_WIDTH, "result width")
+assert_equals(
+  #PawnAuctionSearch.slotControls,
+  #PawnAuctionSearch.slotFilters,
+  "slot control count"
+)
+assert_equals(
+  PawnAuctionSearch.resultRows[1].width,
+  PawnAuctionSearch.RESULT_ROW_WIDTH,
+  "result width"
+)
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
 fingerControl:SetChecked(false)
@@ -200,7 +208,11 @@ assert_equals(
   "fast scan waiting timer"
 )
 fire_auction_update(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 2 auctions...", "fast scan progress starts")
+assert_equals(
+  PawnAuctionSearch.statusText.text,
+  "Fast scan scoring 0 / 2 auctions...",
+  "fast scan progress starts"
+)
 finish_fast_scan_processing(PawnAuctionSearch)
 
 local results = get_results(PawnAuctionSearch)
@@ -209,25 +221,57 @@ assert_equals(#results, 1, "upgrade result count")
 assert_equals(result_name(results[1]), "Upgrade Sword", "upgrade result name")
 assert_equals(result_delta(results[1]), 20, "upgrade result delta")
 assert_equals(PawnAuctionSearch.resultRows[1].deltaText.text, "+20.00", "pawn score formatted")
-assert_equals(PawnAuctionSearch.resultRows[1].priceText.text, "1g 0s 0c", "bid price shown by default")
+assert_equals(
+  PawnAuctionSearch.resultRows[1].priceText.text,
+  "Bid 1g 0s 0c / Buy 2g 0s 0c",
+  "bid and buyout prices shown"
+)
 PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
 assert_equals(mock.placedBid.index, 1, "bid button uses selected row")
 assert_equals(mock.placedBid.bid, 10000, "bid button uses bid price")
 mock.placedBid = nil
-PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].buyoutButton)
+results[1].buyoutPrice = 0
+mock.auctions[1].buyoutPrice = 0
+PawnAuctionSearch:UpdateResults()
+assert_equals(
+  PawnAuctionSearch.resultRows[1].priceText.text,
+  "Bid 1g 0s 0c / No buyout",
+  "missing buyout shown explicitly"
+)
+PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
+  PawnAuctionSearch.resultRows[1].buyoutButton
+)
+assert_equals(mock.placedBid, nil, "missing buyout does not spend")
+mock.auctions[1].buyoutPrice = 20000
+results[1].buyoutPrice = 20000
+PawnAuctionSearch:UpdateResults()
+mock.placedBid = nil
+PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
+  PawnAuctionSearch.resultRows[1].buyoutButton
+)
 assert_equals(mock.placedBid.bid, 20000, "buyout button uses buyout price")
 mock.placedBid = nil
 mock.auctions[1].buyoutPrice = 30000
-PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].buyoutButton)
+PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(
+  PawnAuctionSearch.resultRows[1].buyoutButton
+)
 assert_equals(mock.placedBid, nil, "changed auction row blocks buyout")
 mock.auctions[1].buyoutPrice = 20000
 PawnAuctionSearchDB.canUse = true
 results[1].canUse = false
-assert_equals(PawnAuctionSearch:ScoreAuction(results[1], "TestScale"), nil, "can-use filter excludes unusable")
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(results[1], "TestScale"),
+  nil,
+  "can-use filter excludes unusable"
+)
 results[1].canUse = true
 PawnAuctionSearchDB.canUse = false
 PawnAuctionSearchDB.force2h = true
-assert_equals(PawnAuctionSearch:ScoreAuction(results[1], "TestScale"), nil, "force 2h excludes one-hand")
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(results[1], "TestScale"),
+  nil,
+  "force 2h excludes one-hand"
+)
 PawnAuctionSearchDB.force2h = false
 local plateRow = {
   link = "|cff1eff00|Hitem:1004:0:0:0:0:0:0:0|h[Plate Upgrade]|h|r",
@@ -251,9 +295,13 @@ local clothRow = {
   buyoutPrice = 20000,
   bidAmount = 0,
 }
-PawnAuctionSearchDB.armorPreference = "Plate"
+PawnAuctionSearchDB.armorPreference = "plate"
 assert_truthy(PawnAuctionSearch:ScoreAuction(plateRow, "TestScale"), "armor preference keeps plate")
-assert_equals(PawnAuctionSearch:ScoreAuction(clothRow, "TestScale"), nil, "armor preference excludes cloth")
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(clothRow, "TestScale"),
+  nil,
+  "armor preference excludes cloth"
+)
 PawnAuctionSearchDB.armorPreference = ""
 
 PawnAuctionSearch:SelectResult(1)
@@ -316,6 +364,11 @@ assert_equals(mock.lastAuctionQuery[10], true, "fast scan getAll flag")
 mock.lastAuctionQuery = nil
 start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery, nil, "active fast scan is not restarted")
+PawnAuctionSearch:SelectAuctionTab(1)
+assert_equals(PawnAuctionSearch.scanActive, false, "leaving tab cancels active scan")
+assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "leaving tab invalidates cache")
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery[10], true, "fresh fast scan after tab change")
 mock.fire("AUCTION_HOUSE_CLOSED")
 assert_equals(PawnAuctionSearch.scanActive, false, "auction close cancels scan")
 assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "closed scan cache remains invalid")
@@ -323,18 +376,44 @@ start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery[10], true, "fresh fast scan after close")
 mock.forcePagedListUpdate = true
 fire_auction_update(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.fastScanProcessing, false, "ordinary update does not start fast processing")
+assert_equals(
+  PawnAuctionSearch.fastScanProcessing,
+  false,
+  "ordinary update does not start fast processing"
+)
 assert_equals(PawnAuctionSearch.scanActive, true, "ordinary update keeps fast scan waiting")
-assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "ordinary update leaves cache incomplete")
+assert_equals(
+  PawnAuctionSearch.auctionCacheComplete,
+  false,
+  "ordinary update leaves cache incomplete"
+)
 assert_equals(#PawnAuctionSearch.auctionCacheRows, 0, "ordinary update leaves cache empty")
 mock.forcePagedListUpdate = false
 PawnAuctionSearch.FAST_SCAN_ROWS_PER_TICK = 10
 fire_auction_update(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 51 auctions...", "fast scan progress for all rows")
+assert_equals(
+  PawnAuctionSearch.statusText.text,
+  "Fast scan scoring 0 / 51 auctions...",
+  "fast scan progress for all rows"
+)
 PawnAuctionSearch:OnUpdate(0.1)
 assert_equals(PawnAuctionSearch.fastScanProcessIndex, 11, "fast scan batch advances")
+mock.auctions[20].owner = "ChangedSeller"
 fire_auction_update(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.fastScanProcessIndex, 11, "duplicate fast scan update is ignored")
+assert_equals(
+  PawnAuctionSearch.fastScanProcessing,
+  false,
+  "same-size list mutation cancels fast scan"
+)
+assert_equals(
+  PawnAuctionSearch.auctionCacheComplete,
+  false,
+  "mutated fast scan leaves cache incomplete"
+)
+mock.auctions[20].owner = "SellerTwo"
+start_scan(PawnAuctionSearch)
+fire_auction_update(PawnAuctionSearch)
+PawnAuctionSearch:OnUpdate(0.1)
 finish_fast_scan_processing(PawnAuctionSearch)
 PawnAuctionSearch.FAST_SCAN_ROWS_PER_TICK = 250
 assert_equals(#get_results(PawnAuctionSearch), 1, "fast scan upgrade count")
@@ -404,6 +483,21 @@ start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery, nil, "partial cache does not start page scan")
 assert_equals(PawnAuctionSearch.scanActive, false, "partial cache scan stops")
 
+PawnAuctionSearch.auctionCacheRows = nil
+PawnAuctionSearch.auctionCacheComplete = false
+mock.canQueryAll = true
+mock.auctions[1].link = nil
+mock.lastAuctionQuery = nil
+start_scan(PawnAuctionSearch)
+fire_auction_update(PawnAuctionSearch)
+finish_fast_scan_processing(PawnAuctionSearch)
+assert_equals(
+  PawnAuctionSearch.auctionCacheComplete,
+  false,
+  "incomplete fast scan invalidates cache"
+)
+assert_equals(PawnAuctionSearch.scanActive, false, "incomplete fast scan stops")
+assert_equals(#get_results(PawnAuctionSearch), 0, "incomplete fast scan discards results")
 
 
 mock.mainHandItemId = 9002
