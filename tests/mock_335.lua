@@ -472,7 +472,7 @@ local function auction_link(itemId, name)
 end
 
 function CanSendAuctionQuery()
-  return true
+  return mock.canQuery ~= false
 end
 
 function QueryAuctionItems(...)
@@ -604,6 +604,7 @@ function mock.reset()
   mock.dropdownsClosed = false
   mock.lastAuctionQuery = nil
   mock.currentPage = 0
+  mock.canQuery = true
   mock.placedBid = nil
   mock.selectedAuctionList = nil
   _G.selectedAuction = nil

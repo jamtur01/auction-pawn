@@ -167,10 +167,34 @@ function addon:Print(message)
   end
 end
 
+function addon:HideMainFrame()
+  if self.mainFrame then
+    self.mainFrame:Hide()
+  end
+end
+
+function addon:HookBlizzardTabs()
+  if self.tabHooked or type(hooksecurefunc) ~= "function" then
+    return
+  end
+  if type(AuctionFrameTab_OnClick) == "function" then
+    hooksecurefunc("AuctionFrameTab_OnClick", function(tab)
+      if tab ~= _G.AuctionFrameTab4 then
+        addon:HideMainFrame()
+      end
+    end)
+    self.tabHooked = true
+  end
+end
+
+
 function addon:OnLoad()
   self.eventFrame = self.eventFrame or CreateFrame("Frame")
   self.eventFrame:SetScript("OnEvent", function(_, event, arg1)
     addon:OnEvent(event, arg1)
+  end)
+  self.eventFrame:SetScript("OnUpdate", function(_, elapsed)
+    addon:OnUpdate(elapsed)
   end)
   self.eventFrame:RegisterEvent("ADDON_LOADED")
   self.eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
@@ -218,6 +242,7 @@ function addon:InitializeAuctionTab()
   AuctionFrame.numTabs = 4
 
   self.auctionTab = tab
+  self:HookBlizzardTabs()
   self:CreateMainFrame()
 end
 
@@ -396,7 +421,11 @@ function addon:GetPawnValueForLink(link, scaleName)
   if not item then
     return nil
   end
-  return PawnGetSingleValueFromItem(item, scaleName) or 0
+  local value, unenchantedValue = PawnGetSingleValueFromItem(item, scaleName)
+  if self.db and self.db.unenchanted and unenchantedValue then
+    return unenchantedValue
+  end
+  return value or unenchantedValue or 0
 end
 
 function addon:GetPawnValueForEquipped(slot, scaleName)
@@ -407,7 +436,11 @@ function addon:GetPawnValueForEquipped(slot, scaleName)
   if not item then
     return 0
   end
-  return PawnGetSingleValueFromItem(item, scaleName) or 0
+  local value, unenchantedValue = PawnGetSingleValueFromItem(item, scaleName)
+  if self.db and self.db.unenchanted and unenchantedValue then
+    return unenchantedValue
+  end
+  return value or unenchantedValue or 0
 end
 
 function addon:IsAffordable(row)
@@ -485,17 +518,28 @@ function addon:GetComparisonSlots(row)
     return nil
   end
 
+  local hasTitanGrip = playerKnowsSpell(46917)
+  local hasTwoHandEquipped = self:IsTwoHandEquipped()
+
   if row.equipLoc == "INVTYPE_WEAPON" then
-    if self:IsTwoHandEquipped() or not self:CanDualWield() then
+    if hasTwoHandEquipped and not hasTitanGrip then
+      return singleSlot("MainHandSlot"), "single"
+    end
+    if not self:CanDualWield() then
       return singleSlot("MainHandSlot"), "single"
     end
     return slots, "bestReplacement"
   end
 
-  if row.equipLoc == "INVTYPE_WEAPONOFFHAND"
-    or row.equipLoc == "INVTYPE_HOLDABLE"
-    or row.equipLoc == "INVTYPE_SHIELD" then
-    if self:IsTwoHandEquipped() then
+  if row.equipLoc == "INVTYPE_WEAPONOFFHAND" then
+    if not self:CanDualWield() then
+      return nil
+    end
+    return singleSlot("SecondaryHandSlot"), "single"
+  end
+
+  if row.equipLoc == "INVTYPE_HOLDABLE" or row.equipLoc == "INVTYPE_SHIELD" then
+    if hasTwoHandEquipped then
       return singleSlot("MainHandSlot"), "single"
     end
     return slots, "single"
@@ -506,7 +550,7 @@ function addon:GetComparisonSlots(row)
     if offhand then
       table.insert(slots, offhand)
     end
-    if playerKnowsSpell(46917) then
+    if hasTitanGrip then
       return slots, "bestReplacement"
     end
     return slots, "combined"
@@ -601,6 +645,7 @@ end
 
 function addon:SelectAuctionTab(index)
   if index ~= 4 then
+    self:HideMainFrame()
     if AuctionFrameTab_OnClick then
       AuctionFrameTab_OnClick(_G["AuctionFrameTab" .. tostring(index)])
     end
@@ -690,17 +735,42 @@ function addon:SetStatus(message)
   end
 end
 
+function addon:QueryAuctionPage(page, status)
+  if not CanSendAuctionQuery("list") then
+    self.waitingForQuery = true
+    self.waitingPage = page
+    self:SetStatus("Auction query is throttled. Waiting to retry...")
+    return false
+  end
+  self.waitingForQuery = false
+  self.waitingPage = nil
+  self.currentQueryPage = page
+  QueryAuctionItems("", "", "", nil, nil, nil, page, false, -1)
+  if status then
+    self:SetStatus(status)
+  end
+  return true
+end
+
 function addon:QueryScanPage()
   if not self.scanActive then
     return false
   end
-  if not CanSendAuctionQuery("list") then
-    self:SetStatus("Auction query is throttled. Try again shortly.")
-    return false
+  return self:QueryAuctionPage(
+    self.scanPage,
+    "Scanning auction house page " .. tostring(self.scanPage + 1) .. "..."
+  )
+end
+
+function addon:OnUpdate()
+  if not self.waitingForQuery then
+    return
   end
-  QueryAuctionItems("", "", "", nil, nil, nil, self.scanPage, false, -1)
-  self:SetStatus("Scanning auction house page " .. tostring(self.scanPage + 1) .. "...")
-  return true
+  if self.pendingSelection then
+    self:QueryAuctionPage(self.pendingSelection.page, "Loading selected result page...")
+  elseif self.scanActive then
+    self:QueryScanPage()
+  end
 end
 
 function addon:StartScan()
@@ -718,12 +788,15 @@ function addon:StartScan()
   self.scanScaleName = scaleOrMessage
   self:UpdateResults()
 
-  if not self:QueryScanPage() then
-    self.scanActive = false
-  end
+  self:QueryScanPage()
 end
 
 function addon:OnAuctionItemListUpdate()
+  self.currentAuctionPage = self.currentQueryPage or self.currentAuctionPage
+  if self.pendingSelection then
+    self:CompletePendingSelection()
+    return
+  end
   if not self.scanActive then
     return
   end
@@ -743,9 +816,8 @@ function addon:OnAuctionItemListUpdate()
   local scanned = (self.scanPage + 1) * self.AUCTIONS_PER_PAGE
   if scanned < total then
     self.scanPage = self.scanPage + 1
-    if self:QueryScanPage() then
-      return
-    end
+    self:QueryScanPage()
+    return
   end
 
   table.sort(self.results, sortByScore)
@@ -778,16 +850,44 @@ function addon:UpdateResults()
   end
 end
 
+function addon:SelectCurrentBrowseResult(result)
+  if GetAuctionItemLink("list", result.index) == result.link then
+    SetSelectedAuctionItem("list", result.index)
+    return true
+  end
+  local count = GetNumAuctionItems("list") or 0
+  for index = 1, count do
+    if GetAuctionItemLink("list", index) == result.link then
+      SetSelectedAuctionItem("list", index)
+      return true
+    end
+  end
+  return false
+end
+
+function addon:CompletePendingSelection()
+  local result = self.pendingSelection
+  self.pendingSelection = nil
+  if not result then
+    return
+  end
+  if self:SelectCurrentBrowseResult(result) then
+    self:SetStatus("Selected " .. (result.name or "auction result") .. ".")
+  else
+    self:SetStatus("Auction result is stale. Search again before selecting it.")
+  end
+end
+
 function addon:SelectResult(resultIndex)
   local result = self.results and self.results[resultIndex]
   if not result then
     return
   end
-  if result.page ~= self.currentAuctionPage then
-    self:SetStatus("Result is from another auction page. Search again before selecting it.")
+  if result.page == self.currentAuctionPage and self:SelectCurrentBrowseResult(result) then
     return
   end
-  SetSelectedAuctionItem("list", result.index)
+  self.pendingSelection = result
+  self:QueryAuctionPage(result.page, "Loading selected result page...")
 end
 
 addon:OnLoad()
