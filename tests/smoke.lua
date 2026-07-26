@@ -156,6 +156,8 @@ fingerControl.scripts.OnClick(fingerControl)
 PawnAuctionSearchDB = PawnAuctionSearchDB or {}
 PawnAuctionSearchDB.scaleName = ""
 
+mock.canQueryAll = true
+
 start_scan(PawnAuctionSearch)
 fire_auction_update(PawnAuctionSearch)
 
@@ -168,6 +170,7 @@ assert_equals(result_delta(results[1]), 20, "upgrade result delta")
 PawnAuctionSearch:SelectResult(1)
 assert_equals(_G.selectedAuction, 1, "selected auction index")
 PawnAuctionSearch.auctionCacheRows = nil
+PawnAuctionSearch.auctionCacheComplete = false
 
 
 
@@ -200,13 +203,18 @@ mock.auctions[51] = {
   timeLeft = 2,
 }
 mock.currentPage = 0
+mock.canQueryAll = false
+mock.lastAuctionQuery = nil
+PawnAuctionSearch.auctionCacheRows = nil
+PawnAuctionSearch.auctionCacheComplete = false
 start_scan(PawnAuctionSearch)
-fire_auction_update(PawnAuctionSearch)
-assert_equals(#get_results(PawnAuctionSearch), 0, "first page upgrade count")
-assert_equals(mock.lastAuctionQuery[7], 1, "next page query")
-fire_auction_update(PawnAuctionSearch)
-assert_equals(#get_results(PawnAuctionSearch), 1, "paginated upgrade count")
-assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "paginated result")
+assert_equals(mock.lastAuctionQuery, nil, "unavailable fast scan does not page query")
+assert_equals(PawnAuctionSearch.scanActive, false, "unavailable fast scan stops")
+assert_equals(
+  PawnAuctionSearch.statusText.text,
+  "Fast scan is not ready or unsupported, and no cached scan is available.",
+  "unavailable fast scan status"
+)
 
 PawnAuctionSearch.auctionCacheRows = nil
 PawnAuctionSearch.auctionCacheComplete = false
@@ -275,73 +283,16 @@ assert_equals(mock.lastAuctionQuery, nil, "cached rescore avoids auction query")
 assert_equals(#get_results(PawnAuctionSearch), 1, "cached upgrade count")
 assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "cached result")
 
-PawnAuctionSearch.auctionCacheRows = nil
-PawnAuctionSearch.auctionCacheComplete = false
-mock.fastScan = false
-mock.canQuery = true
-mock.lastAuctionQuery = nil
-start_scan(PawnAuctionSearch)
-mock.canQuery = false
-fire_auction_update(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "partial cache remains invalid")
-mock.fire("AUCTION_HOUSE_CLOSED")
-mock.canQuery = true
-mock.lastAuctionQuery = nil
-start_scan(PawnAuctionSearch)
-assert_equals(mock.lastAuctionQuery[7], 0, "partial cache ignored")
-PawnAuctionSearch.scanActive = false
-PawnAuctionSearch.waitingForQuery = false
-PawnAuctionSearch.auctionCacheRows = nil
-mock.fastScan = false
-
-mock.auctions[1] = {
-  name = "Upgrade Sword",
-  itemId = 1001,
-  link = "|cff1eff00|Hitem:1001:0:0:0:0:0:0:0|h[Upgrade Sword]|h|r",
-  quality = 2,
-  level = 80,
-  minBid = 10000,
-  minIncrement = 100,
-  buyoutPrice = 20000,
-  bidAmount = 0,
-  owner = "SellerOne",
-  timeLeft = 2,
+PawnAuctionSearch.auctionCacheRows = {
+  { link = "|cff1eff00|Hitem:1001:0:0:0:0:0:0:0|h[Upgrade Sword]|h|r" },
 }
-for index = 2, 51 do
-  mock.auctions[index] = {
-    name = "Downgrade Sword",
-    itemId = 1002,
-    link = "|cff1eff00|Hitem:1002:0:0:0:0:0:0:0|h[Downgrade Sword]|h|r",
-    quality = 2,
-    level = 80,
-    minBid = 10000,
-    minIncrement = 100,
-    buyoutPrice = 20000,
-    bidAmount = 0,
-    owner = "SellerTwo",
-    timeLeft = 2,
-  }
-end
-mock.currentPage = 0
-_G.selectedAuction = nil
+PawnAuctionSearch.auctionCacheComplete = false
+mock.canQueryAll = false
+mock.lastAuctionQuery = nil
 start_scan(PawnAuctionSearch)
-fire_auction_update(PawnAuctionSearch)
-fire_auction_update(PawnAuctionSearch)
-assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "early page result")
-PawnAuctionSearch:SelectResult(1)
-assert_equals(mock.lastAuctionQuery[7], 0, "selection page requery")
-assert_equals(_G.selectedAuction, nil, "selection waits for requery")
-fire_auction_update(PawnAuctionSearch)
-assert_equals(_G.selectedAuction, 1, "requeried page selected auction")
+assert_equals(mock.lastAuctionQuery, nil, "partial cache does not start page scan")
+assert_equals(PawnAuctionSearch.scanActive, false, "partial cache scan stops")
 
-PawnAuctionSearch.auctionCacheRows = nil
-
-mock.canQuery = false
-start_scan(PawnAuctionSearch)
-assert_equals(PawnAuctionSearch.scanActive, true, "throttled scan remains active")
-mock.canQuery = true
-PawnAuctionSearch:OnUpdate(0.1)
-assert_equals(mock.lastAuctionQuery[7], 0, "throttled scan retry page")
 
 
 mock.mainHandItemId = 9002

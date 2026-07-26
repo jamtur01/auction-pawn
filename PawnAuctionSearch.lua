@@ -983,9 +983,11 @@ function addon:StartScan()
   if self:QueryFastScan() then
     return
   end
-  self.auctionCacheRows = {}
+  self.scanActive = false
+  self.fastScanActive = false
+  self.auctionCacheRows = nil
   self.auctionCacheComplete = false
-  self:QueryScanPage()
+  self:SetStatus("Fast scan is not ready or unsupported, and no cached scan is available.")
 end
 
 function addon:OnAuctionItemListUpdate()
