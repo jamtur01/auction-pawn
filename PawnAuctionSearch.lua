@@ -1102,6 +1102,9 @@ function addon:OnAuctionItemListUpdate()
   count = count or 0
   total = total or count
   if self.fastScanActive then
+    if count ~= total then
+      return
+    end
     self:StartFastScanProcessing(count)
     return
   end

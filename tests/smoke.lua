@@ -256,6 +256,13 @@ assert_equals(PawnAuctionSearch.scanActive, false, "auction close cancels scan")
 assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "closed scan cache remains invalid")
 start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery[10], true, "fresh fast scan after close")
+mock.forcePagedListUpdate = true
+fire_auction_update(PawnAuctionSearch)
+assert_equals(PawnAuctionSearch.fastScanProcessing, false, "ordinary update does not start fast processing")
+assert_equals(PawnAuctionSearch.scanActive, true, "ordinary update keeps fast scan waiting")
+assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "ordinary update leaves cache incomplete")
+assert_equals(#PawnAuctionSearch.auctionCacheRows, 0, "ordinary update leaves cache empty")
+mock.forcePagedListUpdate = false
 PawnAuctionSearch.FAST_SCAN_ROWS_PER_TICK = 10
 fire_auction_update(PawnAuctionSearch)
 assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 51 auctions...", "fast scan progress for all rows")

@@ -498,7 +498,7 @@ end
 
 function GetNumAuctionItems(listType)
   local total = #mock.auctions
-  if mock.fastScan then
+  if mock.fastScan and not mock.forcePagedListUpdate then
     return total, total
   end
   local remaining = total - ((mock.currentPage or 0) * 50)
@@ -626,6 +626,7 @@ function mock.reset()
   mock.canQuery = true
   mock.canQueryAll = false
   mock.fastScan = false
+  mock.forcePagedListUpdate = false
   mock.mainHandItemId = 9001
   mock.offHandItemId = nil
   mock.knownSpells = {}
