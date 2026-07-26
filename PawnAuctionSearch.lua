@@ -4,7 +4,8 @@ _G.PawnAuctionSearch = addon
 addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
-addon.SCALE_DROPDOWN_WIDTH = 260
+addon.SCALE_DROPDOWN_WIDTH = 200
+addon.SLOT_FILTER_COLUMN_WIDTH = 92
 addon.RESULTS_LEFT_OFFSET = 300
 addon.RESULT_ROW_WIDTH = 390
 addon.RESULT_DELTA_OFFSET = 210
@@ -735,7 +736,8 @@ local function addSlotFilterCheckButton(addon, parent, filter, index, title)
   )
   check:SetSize(20, 20)
   if row == 0 then
-    check:SetPoint("TOPLEFT", title, "BOTTOMLEFT", column * 145, -4)
+    local xOffset = column * addon.SLOT_FILTER_COLUMN_WIDTH
+    check:SetPoint("TOPLEFT", title, "BOTTOMLEFT", xOffset, -4)
   else
     check:SetPoint("TOPLEFT", parent.slotControls[index - 1], "BOTTOMLEFT", 0, -2)
   end
