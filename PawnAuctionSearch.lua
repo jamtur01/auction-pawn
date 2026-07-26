@@ -10,6 +10,8 @@ addon.RESULTS_LEFT_OFFSET = 300
 addon.RESULT_ROW_WIDTH = 390
 addon.RESULT_DELTA_OFFSET = 210
 addon.RESULT_PRICE_OFFSET = 290
+addon.FAST_SCAN_ROWS_PER_TICK = 250
+addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
 addon.slotFilters = {
   { label = "Head", slots = { "HeadSlot" } },
@@ -225,12 +227,16 @@ end
 
 
 function addon:CancelActiveScan(message)
-  local wasScanning = self.scanActive or self.fastScanActive
+  local wasScanning = self.scanActive or self.fastScanActive or self.fastScanProcessing
   if not wasScanning and not self.waitingForQuery and not self.pendingSelection then
     return
   end
   self.scanActive = false
   self.fastScanActive = false
+  self.fastScanProcessing = false
+  self.fastScanProcessIndex = nil
+  self.fastScanProcessTotal = nil
+  self.fastScanNextStatus = nil
   self.waitingForQuery = false
   self.waitingPage = nil
   self.pendingSelection = nil
@@ -875,6 +881,10 @@ function addon:FinishScan(statusSuffix)
   table.sort(self.results, sortByScore)
   self.scanActive = false
   self.fastScanActive = false
+  self.fastScanProcessing = false
+  self.fastScanProcessIndex = nil
+  self.fastScanProcessTotal = nil
+  self.fastScanNextStatus = nil
   local status = "Found " .. tostring(#self.results) .. " upgrade auctions"
   if statusSuffix then
     status = status .. " " .. statusSuffix
@@ -915,6 +925,59 @@ function addon:QueryFastScan()
   return true
 end
 
+function addon:SetFastScanProgress(scanned, total)
+  self:SetStatus(
+    "Fast scan scoring " .. tostring(scanned) .. " / " .. tostring(total) .. " auctions..."
+  )
+end
+
+function addon:StartFastScanProcessing(count)
+  self.results = {}
+  self.auctionCacheRows = {}
+  self.currentAuctionPage = 0
+  self.fastScanProcessing = true
+  self.fastScanProcessIndex = 1
+  self.fastScanProcessTotal = count
+  self.fastScanNextStatus = self.FAST_SCAN_STATUS_INTERVAL
+  self:SetFastScanProgress(0, count)
+end
+
+function addon:ProcessFastScanBatch()
+  if not self.fastScanProcessing then
+    return false
+  end
+
+  local total = self.fastScanProcessTotal or 0
+  local startIndex = self.fastScanProcessIndex or 1
+  local endIndex = math.min(total, startIndex + self.FAST_SCAN_ROWS_PER_TICK - 1)
+  for index = startIndex, endIndex do
+    local row = self:ReadAuctionRow(index)
+    if row then
+      table.insert(self.auctionCacheRows, copyAuctionRow(row))
+      local result = self:ScoreAuction(row, self.scanScaleName)
+      if result then
+        table.insert(self.results, result)
+      end
+    end
+  end
+
+  self.fastScanProcessIndex = endIndex + 1
+  if endIndex >= total then
+    self.auctionCacheComplete = true
+    self:FinishScan("from fast scan")
+    return true
+  end
+
+  if endIndex >= (self.fastScanNextStatus or 0) then
+    self:SetFastScanProgress(endIndex, total)
+    repeat
+      self.fastScanNextStatus = (self.fastScanNextStatus or 0) + self.FAST_SCAN_STATUS_INTERVAL
+    until self.fastScanNextStatus > endIndex
+  end
+  return true
+end
+
+
 function addon:QueryAuctionPage(page, status)
   if not CanSendAuctionQuery("list") then
     self.waitingForQuery = true
@@ -943,6 +1006,10 @@ function addon:QueryScanPage()
 end
 
 function addon:OnUpdate()
+  if self.fastScanProcessing then
+    self:ProcessFastScanBatch()
+    return
+  end
   if not self.waitingForQuery then
     return
   end
@@ -996,15 +1063,23 @@ function addon:OnAuctionItemListUpdate()
     self:CompletePendingSelection()
     return
   end
+  if self.fastScanProcessing then
+    return
+  end
   if not self.scanActive then
     return
   end
   local count, total = GetNumAuctionItems("list")
   count = count or 0
   total = total or count
+  if self.fastScanActive then
+    self:StartFastScanProcessing(count)
+    return
+  end
+
   self.results = self.results or {}
   self.auctionCacheRows = self.auctionCacheRows or {}
-  self.currentAuctionPage = self.fastScanActive and 0 or self.scanPage
+  self.currentAuctionPage = self.scanPage
   for index = 1, count do
     local row = self:ReadAuctionRow(index)
     if row then
@@ -1014,12 +1089,6 @@ function addon:OnAuctionItemListUpdate()
         table.insert(self.results, result)
       end
     end
-  end
-
-  if self.fastScanActive then
-    self.auctionCacheComplete = true
-    self:FinishScan("from fast scan")
-    return
   end
 
   local scanned = (self.scanPage + 1) * self.AUCTIONS_PER_PAGE

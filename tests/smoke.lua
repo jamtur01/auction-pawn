@@ -87,6 +87,17 @@ local function fire_auction_update(addon)
   mock.fire("AUCTION_ITEM_LIST_UPDATE")
 end
 
+local function finish_fast_scan_processing(addon)
+  local guard = 0
+  while addon.fastScanProcessing do
+    guard = guard + 1
+    if guard > 1000 then
+      fail("fast scan processing did not finish")
+    end
+    addon:OnUpdate(0.1)
+  end
+end
+
 local function get_results(addon)
   return addon.results or addon.Results or addon.searchResults or addon.search_results
 end
@@ -160,6 +171,8 @@ mock.canQueryAll = true
 
 start_scan(PawnAuctionSearch)
 fire_auction_update(PawnAuctionSearch)
+assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 2 auctions...", "fast scan progress starts")
+finish_fast_scan_processing(PawnAuctionSearch)
 
 local results = get_results(PawnAuctionSearch)
 assert_truthy(results, "scan results exist")
@@ -232,7 +245,15 @@ assert_equals(PawnAuctionSearch.scanActive, false, "auction close cancels scan")
 assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "closed scan cache remains invalid")
 start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery[10], true, "fresh fast scan after close")
+PawnAuctionSearch.FAST_SCAN_ROWS_PER_TICK = 10
 fire_auction_update(PawnAuctionSearch)
+assert_equals(PawnAuctionSearch.statusText.text, "Fast scan scoring 0 / 51 auctions...", "fast scan progress for all rows")
+PawnAuctionSearch:OnUpdate(0.1)
+assert_equals(PawnAuctionSearch.fastScanProcessIndex, 11, "fast scan batch advances")
+fire_auction_update(PawnAuctionSearch)
+assert_equals(PawnAuctionSearch.fastScanProcessIndex, 11, "duplicate fast scan update is ignored")
+finish_fast_scan_processing(PawnAuctionSearch)
+PawnAuctionSearch.FAST_SCAN_ROWS_PER_TICK = 250
 assert_equals(#get_results(PawnAuctionSearch), 1, "fast scan upgrade count")
 assert_equals(#PawnAuctionSearch.auctionCacheRows, 51, "fast scan cache count")
 assert_equals(get_results(PawnAuctionSearch)[1].page, 1, "fast scan result fallback page")
