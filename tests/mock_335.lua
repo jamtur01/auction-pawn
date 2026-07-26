@@ -129,6 +129,10 @@ end
 function Frame:SetTexture(texture)
   self.texture = texture
 end
+function Frame:SetVertexColor(red, green, blue, alpha)
+  self.vertexColor = {red, green, blue, alpha}
+end
+
 
 function Frame:SetNormalTexture(texture)
   self.normalTexture = texture
@@ -419,6 +423,13 @@ end
 
 function SetAuctionsTabShowing(shown)
   mock.auctionsTabShowing = shown
+end
+
+function HideUIPanel(frame)
+  mock.hiddenPanel = frame
+  if frame then
+    frame:Hide()
+  end
 end
 
 
@@ -746,6 +757,9 @@ function mock.reset()
   AuctionFrameBid = mock.create_frame("Frame", "AuctionFrameBid", AuctionFrame)
   AuctionFrameAuctions = mock.create_frame("Frame", "AuctionFrameAuctions", AuctionFrame)
   AuctionFrameMoneyFrame = mock.create_frame("Frame", "AuctionFrameMoneyFrame", AuctionFrame)
+  AuctionFrameCloseButton = mock.create_frame("Button", "AuctionFrameCloseButton", AuctionFrame)
+  BrowseCloseButton = mock.create_frame("Button", "BrowseCloseButton", AuctionFrameBrowse)
+  BrowseCloseButton:SetSize(80, 22)
   AuctionFrameTab1 = mock.create_frame("Button", "AuctionFrameTab1", AuctionFrame)
   AuctionFrameTab2 = mock.create_frame("Button", "AuctionFrameTab2", AuctionFrame)
   AuctionFrameTab3 = mock.create_frame("Button", "AuctionFrameTab3", AuctionFrame)

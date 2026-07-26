@@ -155,6 +155,7 @@ assert_equals(mock.auctionsTabShowing, false, "Pawn tab hides owner chrome")
 AuctionFrameTab_OnClick(AuctionFrameTab1)
 assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden on Browse tab")
 assert_equals(AuctionFrameMoneyFrame:IsShown(), true, "Browse tab restores money frame")
+assert_truthy(AuctionFrameCloseButton, "AuctionFrame top close button remains present")
 
 
 local scales = discover_scales(PawnAuctionSearch)
@@ -196,6 +197,11 @@ assert_equals(
   PawnAuctionSearch.SCALE_DROPDOWN_WIDTH,
   "scale dropdown width"
 )
+assert_equals(
+  PawnAuctionSearch.armorDropDown.width,
+  PawnAuctionSearch.ARMOR_DROPDOWN_WIDTH,
+  "armor dropdown width"
+)
 assert_equals(PawnAuctionSearch.scaleDropDown.text, "TestScale", "scale dropdown text set")
 assert_equals(
   PawnAuctionSearch.scaleDropDown.selectedValue,
@@ -206,6 +212,11 @@ assert_equals(
   PawnAuctionSearch.armorDropDown.selectedValue,
   "",
   "armor dropdown selected value set"
+)
+assert_equals(
+  PawnAuctionSearchSlotFilterTitle.point[5],
+  PawnAuctionSearch.SLOT_FILTERS_TOP_OFFSET,
+  "slot grid starts below top frame edge"
 )
 assert_equals(
   #PawnAuctionSearch.slotControls,
@@ -234,9 +245,14 @@ assert_equals(
 )
 assert_truthy(PawnAuctionSearch.resultScrollFrame, "result scroll frame exists")
 assert_equals(
+  PawnAuctionSearch.statusText.point[5],
+  PawnAuctionSearch.RESULTS_STATUS_OFFSET,
+  "status has a dedicated line above results"
+)
+assert_equals(
   PawnAuctionSearch.resultsHeader.point[5],
   PawnAuctionSearch.RESULTS_TOP_OFFSET,
-  "results start below top controls"
+  "results start below status"
 )
 assert_equals(
   PawnAuctionSearch.resultsHeader.point[4],
@@ -252,21 +268,40 @@ assert_truthy(
     <= PawnAuctionSearch.RESULT_ROW_WIDTH,
   "buyout price column stays inside result row"
 )
-assert_truthy(
-  PawnAuctionSearch.RESULT_BID_OFFSET + PawnAuctionSearch.bidButton.width
-    <= PawnAuctionSearch.RESULT_BUYOUT_OFFSET,
-  "Bid action ends before Buy action"
+assert_equals(
+  PawnAuctionSearch.resultRows[1].dividerTexture.width,
+  PawnAuctionSearch.RESULT_ROW_WIDTH,
+  "result row divider spans row"
 )
-assert_truthy(
-  PawnAuctionSearch.RESULT_BUYOUT_OFFSET + PawnAuctionSearch.buyoutButton.width
-    <= PawnAuctionSearch.RESULT_ROW_WIDTH,
-  "Buy action stays inside result pane"
+assert_equals(PawnAuctionSearch.closeButton.width, 80, "Close action uses AuctionUI width")
+assert_equals(PawnAuctionSearch.closeButton.height, 22, "Close action uses AuctionUI height")
+assert_equals(PawnAuctionSearch.closeButton.text, "Close", "Close action label is explicit")
+assert_equals(PawnAuctionSearch.closeButton.shown, true, "Close action is always visible")
+assert_equals(
+  PawnAuctionSearch.closeButton.point[1],
+  "BOTTOMRIGHT",
+  "Close action anchors to visible bottom edge"
 )
+assert_equals(
+  PawnAuctionSearch.buyoutButton.point[2],
+  PawnAuctionSearch.closeButton,
+  "Buyout action sits left of Close"
+)
+assert_equals(
+  PawnAuctionSearch.bidButton.point[2],
+  PawnAuctionSearch.buyoutButton,
+  "Bid action sits left of Buyout"
+)
+local actionButtonWidth = PawnAuctionSearch.ACTION_BUTTON_WIDTH * 3
+assert_truthy(actionButtonWidth <= PawnAuctionSearch.RESULT_ROW_WIDTH, "all actions fit row")
 local resultBottom = 72 - PawnAuctionSearch.RESULTS_TOP_OFFSET + 12 + 8
   + (PawnAuctionSearch.RESULTS_VISIBLE_ROWS * PawnAuctionSearch.RESULT_ROW_HEIGHT)
   + 6
-  + PawnAuctionSearch.buyoutButton.height
-assert_truthy(resultBottom <= 447, "result rows and actions stay inside AuctionFrame")
+  + PawnAuctionSearch.ACTION_BUTTON_HEIGHT
+assert_truthy(resultBottom <= 420, "result list leaves bottom controls visible")
+PawnAuctionSearch.closeButton.scripts.OnClick(PawnAuctionSearch.closeButton)
+assert_equals(mock.hiddenPanel, AuctionFrame, "Close action hides AuctionFrame")
+AuctionFrame:Show()
 for _, control in ipairs(PawnAuctionSearch.slotControls) do
   local titleTop = control.point[2].point[5]
   local bottom = titleTop + control.point[5] - PawnAuctionSearch.CHECK_BUTTON_SIZE

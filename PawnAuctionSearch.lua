@@ -4,20 +4,23 @@ _G.PawnAuctionSearch = addon
 addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
-addon.SCALE_DROPDOWN_WIDTH = 200
+addon.SCALE_DROPDOWN_WIDTH = 160
+addon.ARMOR_DROPDOWN_WIDTH = 140
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
-addon.RESULTS_TOP_OFFSET = -210
+addon.RESULTS_STATUS_OFFSET = -185
+addon.RESULTS_TOP_OFFSET = -225
 addon.RESULT_ROW_WIDTH = 460
 addon.RESULT_NAME_WIDTH = 170
 addon.RESULT_DELTA_OFFSET = 180
 addon.RESULT_BID_PRICE_OFFSET = 250
 addon.RESULT_BUYOUT_PRICE_OFFSET = 340
-addon.RESULT_BID_OFFSET = 290
-addon.RESULT_BUYOUT_OFFSET = 376
-addon.RESULTS_VISIBLE_ROWS = 3
+addon.ACTION_BUTTON_WIDTH = 80
+addon.ACTION_BUTTON_HEIGHT = 22
+addon.RESULTS_VISIBLE_ROWS = 2
 addon.RESULT_ROW_HEIGHT = 37
 addon.OPTION_FILTER_ROWS = 6
+addon.SLOT_FILTERS_TOP_OFFSET = -24
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
 addon.SLOT_FILTER_ROWS = 6
 addon.SLOT_FILTERS_LEFT_OFFSET = 280
@@ -1157,7 +1160,7 @@ function addon:CreateArmorPreferenceSelector(parent, anchor)
   dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -16, -4)
   self.armorDropDown = dropdown
   if UIDropDownMenu_SetWidth then
-    UIDropDownMenu_SetWidth(dropdown, 160)
+    UIDropDownMenu_SetWidth(dropdown, self.ARMOR_DROPDOWN_WIDTH)
   end
   if UIDropDownMenu_Initialize then
     UIDropDownMenu_Initialize(dropdown, function()
@@ -1316,7 +1319,13 @@ function addon:CreateSlotFilters(parent)
     "ARTWORK",
     "GameFontNormal"
   )
-  title:SetPoint("TOPLEFT", parent, "TOPLEFT", self.SLOT_FILTERS_LEFT_OFFSET, -10)
+  title:SetPoint(
+    "TOPLEFT",
+    parent,
+    "TOPLEFT",
+    self.SLOT_FILTERS_LEFT_OFFSET,
+    self.SLOT_FILTERS_TOP_OFFSET
+  )
   title:SetText("Slots")
   parent.slotControls = {}
   for index, filter in ipairs(self.slotFilters) do
@@ -1343,7 +1352,7 @@ function addon:CreateMainFrame()
   self:CreateScaleSelector(frame)
 
   local status = frame:CreateFontString("PawnAuctionSearchStatusText", "ARTWORK", "GameFontNormal")
-  status:SetPoint("TOPLEFT", frame, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -195)
+  status:SetPoint("TOPLEFT", frame, "TOPLEFT", self.RESULTS_LEFT_OFFSET, self.RESULTS_STATUS_OFFSET)
   status:SetText("Choose a Pawn scale, then search.")
   frame.statusText = status
   self.statusText = status
@@ -1443,6 +1452,13 @@ function addon:CreateResults(parent)
     if row.selectedTexture.SetAllPoints then
       row.selectedTexture:SetAllPoints(row)
     end
+    row.dividerTexture = row:CreateTexture(nil, "ARTWORK")
+    row.dividerTexture:SetTexture("Interface\\Buttons\\WHITE8X8")
+    if row.dividerTexture.SetVertexColor then
+      row.dividerTexture:SetVertexColor(1, 1, 1, 0.18)
+    end
+    row.dividerTexture:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+    row.dividerTexture:SetSize(self.RESULT_ROW_WIDTH, 1)
     row.selectedTexture:Hide()
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -1468,21 +1484,13 @@ function addon:CreateResults(parent)
     previous = row
   end
 
-  local bidAction = CreateFrame(
+  local closeAction = CreateFrame(
     "Button",
-    "PawnAuctionSearchBidActionButton",
+    "PawnAuctionSearchCloseActionButton",
     parent,
     "UIPanelButtonTemplate"
   )
-  bidAction:SetSize(80, 22)
-  bidAction:SetPoint("TOPLEFT", scrollFrame, "BOTTOMLEFT", self.RESULT_BID_OFFSET, -6)
-  bidAction:SetText("Bid")
-  bidAction:SetScript("OnClick", function()
-    addon:PlaceResultBid(addon:GetActionResultIndex(), false)
-  end)
-  bidAction:Hide()
-  parent.bidButton = bidAction
-  self.bidButton = bidAction
+  closeAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
 
   local buyoutAction = CreateFrame(
     "Button",
@@ -1490,8 +1498,30 @@ function addon:CreateResults(parent)
     parent,
     "UIPanelButtonTemplate"
   )
-  buyoutAction:SetSize(80, 22)
-  buyoutAction:SetPoint("LEFT", bidAction, "RIGHT", 6, 0)
+  buyoutAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
+
+  local bidAction = CreateFrame(
+    "Button",
+    "PawnAuctionSearchBidActionButton",
+    parent,
+    "UIPanelButtonTemplate"
+  )
+  bidAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
+
+  closeAction:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, 8)
+  closeAction:SetText("Close")
+  closeAction:SetScript("OnClick", function()
+    if HideUIPanel then
+      HideUIPanel(AuctionFrame)
+    elseif AuctionFrame then
+      AuctionFrame:Hide()
+    end
+  end)
+  closeAction:Show()
+  parent.closeButton = closeAction
+  self.closeButton = closeAction
+
+  buyoutAction:SetPoint("RIGHT", closeAction, "LEFT", 0, 0)
   buyoutAction:SetText("Buyout")
   buyoutAction:SetScript("OnClick", function()
     addon:PlaceResultBid(addon:GetActionResultIndex(), true)
@@ -1499,6 +1529,15 @@ function addon:CreateResults(parent)
   buyoutAction:Hide()
   parent.buyoutButton = buyoutAction
   self.buyoutButton = buyoutAction
+
+  bidAction:SetPoint("RIGHT", buyoutAction, "LEFT", 0, 0)
+  bidAction:SetText("Bid")
+  bidAction:SetScript("OnClick", function()
+    addon:PlaceResultBid(addon:GetActionResultIndex(), false)
+  end)
+  bidAction:Hide()
+  parent.bidButton = bidAction
+  self.bidButton = bidAction
   return rows
 end
 
