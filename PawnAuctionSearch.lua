@@ -12,6 +12,8 @@ addon.defaults = {
   useBuyout = true,
   bestPrice = false,
   unenchanted = false,
+  force2h = false,
+  armorPreference = "",
   slots = {
     HeadSlot = true,
     NeckSlot = true,
@@ -106,6 +108,9 @@ local function scaleIsVisible(scale)
   if not scale then
     return false
   end
+  if scale.IsVisible ~= nil then
+    return scale.IsVisible
+  end
   if scale.Visible ~= nil then
     return scale.Visible
   end
@@ -193,6 +198,26 @@ function addon:OnEvent(event, arg1)
 end
 
 function addon:InitializeAuctionTab()
+  if self.auctionTab and _G.AuctionFrameTab4 then
+    return
+  end
+  if not AuctionFrame or not AuctionFrameTab3 then
+    return
+  end
+
+  local tab = _G.AuctionFrameTab4 or CreateFrame("Button", "AuctionFrameTab4", AuctionFrame)
+  tab:SetID(4)
+  tab:SetText(self.TAB_LABEL)
+  tab:SetPoint("LEFT", AuctionFrameTab3, "RIGHT", -8, 0)
+  tab:SetScript("OnClick", function(frame)
+    addon:SelectAuctionTab(frame:GetID())
+  end)
+  PanelTemplates_TabResize(tab, 0)
+  PanelTemplates_SetNumTabs(AuctionFrame, 4)
+  AuctionFrame.numTabs = 4
+
+  self.auctionTab = tab
+  self:CreateMainFrame()
 end
 
 function addon:GetScales()
@@ -227,9 +252,8 @@ function addon:ValidateScale(scaleName)
 end
 
 function addon:ReadAuctionRow(index)
-  local name, texture, count, quality, canUse, level, levelColHeader, minBid,
-    minIncrement, buyoutPrice, bidAmount, highBidder, owner, saleStatus, itemId =
-    GetAuctionItemInfo("list", index)
+  local name, texture, count, quality, canUse, level, minBid, minIncrement,
+    buyoutPrice, bidAmount, highBidder, owner = GetAuctionItemInfo("list", index)
   local link = GetAuctionItemLink("list", index)
   if not name or not link then
     return nil
@@ -240,6 +264,7 @@ function addon:ReadAuctionRow(index)
     GetItemInfo(link)
   return {
     index = index,
+    page = self.scanPage or 0,
     name = itemName or name,
     auctionName = name,
     link = itemLink or link,
@@ -248,15 +273,12 @@ function addon:ReadAuctionRow(index)
     canUse = canUse,
     level = itemLevel or level,
     minLevel = itemMinLevel,
-    levelColHeader = levelColHeader,
     minBid = minBid or 0,
     minIncrement = minIncrement or 0,
     buyoutPrice = buyoutPrice or 0,
     bidAmount = bidAmount or 0,
     highBidder = highBidder,
     owner = owner,
-    saleStatus = saleStatus,
-    itemId = itemId,
     itemType = itemType,
     itemSubType = itemSubType,
     itemStackCount = itemStackCount,
@@ -339,31 +361,96 @@ function addon:IsSlotEnabled(slotName)
   return not alias or not self.db or self.db[alias] ~= false
 end
 
+local function playerKnowsSpell(spellId)
+  return type(IsSpellKnown) == "function" and IsSpellKnown(spellId)
+end
+
+function addon:CanDualWield()
+  local _, classToken = UnitClass("player")
+  if classToken == "ROGUE" or classToken == "DEATHKNIGHT" then
+    return true
+  end
+  return playerKnowsSpell(674) or playerKnowsSpell(23588) or playerKnowsSpell(46917)
+end
+
+function addon:IsTwoHandEquipped()
+  local mainHandId = GetInventorySlotInfo("MainHandSlot")
+  if not mainHandId then
+    return false
+  end
+  local link = GetInventoryItemLink("player", mainHandId)
+  if not link then
+    return false
+  end
+  local _, _, _, _, _, _, subType, _, equipLoc = GetItemInfo(link)
+  if equipLoc == "INVTYPE_2HWEAPON" then
+    return true
+  end
+  return type(subType) == "string" and string.find(subType, "Two%-Hand") ~= nil
+end
+
+local function slotByName(slotName)
+  local slotId = GetInventorySlotInfo(slotName)
+  if not slotId or slotId <= 0 then
+    return nil
+  end
+  return { name = slotName, id = slotId }
+end
+
+local function singleSlot(slotName)
+  local slot = slotByName(slotName)
+  if not slot then
+    return nil
+  end
+  return { slot }
+end
+
+
 function addon:GetComparisonSlots(row)
   local slots = self:GetSlotsForEquipLoc(row.equipLoc)
   if not slots or #slots == 0 then
     return nil
   end
 
-  local mode = #slots > 1 and "bestReplacement" or "single"
-  if row.equipLoc == "INVTYPE_2HWEAPON" then
-    local offhandId = GetInventorySlotInfo("SecondaryHandSlot")
-    if offhandId and offhandId > 0 then
-      table.insert(slots, { name = "SecondaryHandSlot", id = offhandId })
+  if row.equipLoc == "INVTYPE_WEAPON" then
+    if self:IsTwoHandEquipped() or not self:CanDualWield() then
+      return singleSlot("MainHandSlot"), "single"
     end
-    if IsSpellKnown(46917) then
-      mode = "bestReplacement"
-    else
-      mode = "combined"
-    end
+    return slots, "bestReplacement"
   end
+
+  if row.equipLoc == "INVTYPE_WEAPONOFFHAND"
+    or row.equipLoc == "INVTYPE_HOLDABLE"
+    or row.equipLoc == "INVTYPE_SHIELD" then
+    if self:IsTwoHandEquipped() then
+      return singleSlot("MainHandSlot"), "single"
+    end
+    return slots, "single"
+  end
+
+  if row.equipLoc == "INVTYPE_2HWEAPON" then
+    local offhand = slotByName("SecondaryHandSlot")
+    if offhand then
+      table.insert(slots, offhand)
+    end
+    if playerKnowsSpell(46917) then
+      return slots, "bestReplacement"
+    end
+    return slots, "combined"
+  end
+
+  local mode = #slots > 1 and "bestReplacement" or "single"
   return slots, mode
 end
 
 function addon:GetEquippedComparisonValue(slots, scaleName, mode)
   local value
   for _, slot in ipairs(slots) do
-    if self:IsSlotEnabled(slot.name) then
+    if not self:IsSlotEnabled(slot.name) then
+      if mode == "combined" then
+        return nil
+      end
+    else
       local equippedValue = self:GetPawnValueForEquipped(slot.id, scaleName)
       if mode == "combined" then
         value = (value or 0) + equippedValue
@@ -421,13 +508,210 @@ function addon:ScoreAuction(row, scaleName)
   return row
 end
 
+local function formatCopper(copper)
+  copper = copper or 0
+  local gold = math.floor(copper / 10000)
+  local silver = math.floor((copper % 10000) / 100)
+  local copperOnly = copper % 100
+  if gold > 0 then
+    return gold .. "g " .. silver .. "s " .. copperOnly .. "c"
+  end
+  if silver > 0 then
+    return silver .. "s " .. copperOnly .. "c"
+  end
+  return copperOnly .. "c"
+end
+
+local function sortByScore(left, right)
+  return (left.score or 0) > (right.score or 0)
+end
+
+function addon:SelectAuctionTab(index)
+  if index ~= 4 then
+    if AuctionFrameTab_OnClick then
+      AuctionFrameTab_OnClick(_G["AuctionFrameTab" .. tostring(index)])
+    end
+    return
+  end
+  PanelTemplates_SetTab(AuctionFrame, 4)
+  if AuctionFrameBrowse then
+    AuctionFrameBrowse:Hide()
+  end
+  if AuctionFrameBid then
+    AuctionFrameBid:Hide()
+  end
+  if AuctionFrameAuctions then
+    AuctionFrameAuctions:Hide()
+  end
+  self:CreateMainFrame()
+  self.mainFrame:Show()
+  AuctionFrame.type = "list"
+end
+
+function addon:CreateMainFrame()
+  if self.mainFrame then
+    return self.mainFrame
+  end
+  local frame = CreateFrame("Frame", "PawnAuctionSearchFrame", AuctionFrame)
+  frame:SetPoint("TOPLEFT", AuctionFrame, "TOPLEFT", 20, -72)
+  frame:SetPoint("BOTTOMRIGHT", AuctionFrame, "BOTTOMRIGHT", -20, 40)
+  frame:Hide()
+
+  local status = frame:CreateFontString("PawnAuctionSearchStatusText")
+  status:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  status:SetText("Choose a Pawn scale, then search.")
+  frame.statusText = status
+  self.statusText = status
+
+  local button = CreateFrame("Button", "PawnAuctionSearchButton", frame)
+  button:SetSize(96, 22)
+  button:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -10)
+  button:SetText("Search")
+  button:SetScript("OnClick", function()
+    addon:StartScan()
+  end)
+  frame.searchButton = button
+
+  self.resultRows = self:CreateResults(frame)
+  self.mainFrame = frame
+  return frame
+end
+
+function addon:CreateResults(parent)
+  if self.resultRows then
+    return self.resultRows
+  end
+  local rows = {}
+  local previous
+  for index = 1, 10 do
+    local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
+    row:SetSize(560, 20)
+    if previous then
+      row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
+    else
+      row:SetPoint("TOPLEFT", parent.searchButton, "BOTTOMLEFT", 0, -14)
+    end
+    row:RegisterForClicks("LeftButtonUp")
+    row:SetScript("OnClick", function()
+      addon:SelectResult(index)
+    end)
+    row.nameText = row:CreateFontString(nil)
+    row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.deltaText = row:CreateFontString(nil)
+    row.deltaText:SetPoint("LEFT", row, "LEFT", 260, 0)
+    row.priceText = row:CreateFontString(nil)
+    row.priceText:SetPoint("LEFT", row, "LEFT", 360, 0)
+    row:Hide()
+    rows[index] = row
+    previous = row
+  end
+  return rows
+end
+
+function addon:SetStatus(message)
+  self:CreateMainFrame()
+  if self.statusText then
+    self.statusText:SetText(message)
+  end
+end
+
+function addon:QueryScanPage()
+  if not self.scanActive then
+    return false
+  end
+  if not CanSendAuctionQuery("list") then
+    self:SetStatus("Auction query is throttled. Try again shortly.")
+    return false
+  end
+  QueryAuctionItems("", "", "", nil, nil, nil, self.scanPage, false, -1)
+  self:SetStatus("Scanning auction house page " .. tostring(self.scanPage + 1) .. "...")
+  return true
+end
+
 function addon:StartScan()
+  self.db = self.db or PawnAuctionSearchDB or self.defaults
+  local valid, scaleOrMessage = self:ValidateScale(self.db and self.db.scaleName)
+  if not valid then
+    self.scanActive = false
+    self:SetStatus(scaleOrMessage)
+    return
+  end
+  self.results = {}
+  self.scanActive = true
+  self.scanPage = 0
+  self.scanScaleName = scaleOrMessage
+  self:UpdateResults()
+
+  if not self:QueryScanPage() then
+    self.scanActive = false
+  end
 end
 
 function addon:OnAuctionItemListUpdate()
+  if not self.scanActive then
+    return
+  end
+  local count, total = GetNumAuctionItems("list")
+  count = count or 0
+  total = total or count
+  self.results = self.results or {}
+  self.currentAuctionPage = self.scanPage
+  for index = 1, count do
+    local row = self:ReadAuctionRow(index)
+    local result = self:ScoreAuction(row, self.scanScaleName)
+    if result then
+      table.insert(self.results, result)
+    end
+  end
+
+  local scanned = (self.scanPage + 1) * self.AUCTIONS_PER_PAGE
+  if scanned < total then
+    self.scanPage = self.scanPage + 1
+    if self:QueryScanPage() then
+      return
+    end
+  end
+
+  table.sort(self.results, sortByScore)
+  self.scanActive = false
+  self:SetStatus("Found " .. tostring(#self.results) .. " upgrade auctions.")
+  self:UpdateResults()
 end
 
-function addon:SelectResult()
+function addon:UpdateResults()
+  self:CreateMainFrame()
+  local results = self.results or {}
+  for index = 1, 10 do
+    local row = self.resultRows[index]
+    local result = results[index]
+    if result then
+      row.resultIndex = index
+      row.nameText:SetText(result.link or result.name or "")
+      row.deltaText:SetText(tostring(result.delta or 0))
+      local bid = result.bidAmount and result.bidAmount > 0 and result.bidAmount or result.minBid
+      row.priceText:SetText("Buyout " .. formatCopper(result.buyoutPrice)
+        .. " / Bid " .. formatCopper(bid))
+      row:Show()
+    else
+      row.resultIndex = nil
+      row.nameText:SetText("")
+      row.deltaText:SetText("")
+      row.priceText:SetText("")
+      row:Hide()
+    end
+  end
+end
+
+function addon:SelectResult(resultIndex)
+  local result = self.results and self.results[resultIndex]
+  if not result then
+    return
+  end
+  if result.page ~= self.currentAuctionPage then
+    self:SetStatus("Result is from another auction page. Search again before selecting it.")
+    return
+  end
+  SetSelectedAuctionItem("list", result.index)
 end
 
 addon:OnLoad()

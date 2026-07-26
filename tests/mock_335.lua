@@ -420,7 +420,7 @@ function GetSpellInfo(spell)
 end
 
 function IsSpellKnown(spell)
-  return true
+  return false
 end
 
 function tContains(t, item)
@@ -464,23 +464,34 @@ end
 
 function QueryAuctionItems(...)
   mock.lastAuctionQuery = {...}
+  mock.currentPage = select(7, ...) or 0
+end
+
+local function currentAuction(index)
+  return mock.auctions[((mock.currentPage or 0) * 50) + index]
 end
 
 function GetNumAuctionItems(listType)
-  return #mock.auctions, #mock.auctions
+  local total = #mock.auctions
+  local remaining = total - ((mock.currentPage or 0) * 50)
+  if remaining < 0 then
+    remaining = 0
+  end
+  local count = remaining > 50 and 50 or remaining
+  return count, total
 end
 
 function GetAuctionItemInfo(listType, index)
-  local row = mock.auctions[index]
+  local row = currentAuction(index)
   if not row then
     return nil
   end
-  return row.name, nil, 1, row.quality, true, row.level, "", row.minBid,
-    row.minIncrement, row.buyoutPrice, row.bidAmount, nil, row.owner, 0, row.itemId
+  return row.name, nil, 1, row.quality, true, row.level, row.minBid,
+    row.minIncrement, row.buyoutPrice, row.bidAmount, nil, row.owner
 end
 
 function GetAuctionItemLink(listType, index)
-  local row = mock.auctions[index]
+  local row = currentAuction(index)
   if not row then
     return nil
   end
@@ -488,7 +499,7 @@ function GetAuctionItemLink(listType, index)
 end
 
 function GetAuctionItemTimeLeft(listType, index)
-  local row = mock.auctions[index]
+  local row = currentAuction(index)
   return row and row.timeLeft or nil
 end
 
@@ -579,6 +590,7 @@ function mock.reset()
   mock.chatMessages = {}
   mock.dropdownsClosed = false
   mock.lastAuctionQuery = nil
+  mock.currentPage = 0
   mock.placedBid = nil
   mock.selectedAuctionList = nil
   _G.selectedAuction = nil
