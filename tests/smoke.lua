@@ -209,6 +209,15 @@ assert_equals(
   "scale dropdown value set"
 )
 assert_equals(
+  PawnAuctionSearch:GetDisplayScaleLabel("Rogue: assassination"),
+  "Rogue: assass.",
+  "long scale labels are shortened for display"
+)
+assert_truthy(
+  string.len(PawnAuctionSearch:GetDisplayScaleLabel("Death Knight: Unholy")) <= 14,
+  "long class scale labels stay capped"
+)
+assert_equals(
   PawnAuctionSearch.armorDropDown.selectedValue,
   "",
   "armor dropdown selected value set"
@@ -282,6 +291,7 @@ assert_equals(
   "BOTTOMRIGHT",
   "Close action anchors to visible bottom edge"
 )
+assert_equals(PawnAuctionSearch.closeButton.point[5], -26, "Close action sits in bottom row")
 assert_equals(
   PawnAuctionSearch.buyoutButton.point[2],
   PawnAuctionSearch.closeButton,
@@ -373,7 +383,14 @@ assert_equals(result_delta(results[1]), 20, "upgrade result delta")
 assert_equals(PawnAuctionSearch.resultRows[1].deltaText.text, "+20.00", "pawn score formatted")
 assert_equals(PawnAuctionSearch.resultRows[1].bidText.text, "1g 0s 0c", "bid price shown")
 assert_equals(PawnAuctionSearch.resultRows[1].buyoutText.text, "2g 0s 0c", "buyout price shown")
-assert_equals(PawnAuctionSearch.bidButton.shown, false, "action buttons hidden before selection")
+assert_equals(PawnAuctionSearch.bidButton.shown, true, "Bid action visible before selection")
+assert_equals(PawnAuctionSearch.buyoutButton.shown, true, "Buyout action visible before selection")
+assert_equals(PawnAuctionSearch.bidButton.enabled, false, "Bid action disabled before selection")
+assert_equals(
+  PawnAuctionSearch.buyoutButton.enabled,
+  false,
+  "Buyout action disabled before selection"
+)
 PawnAuctionSearch.resultRows[1].scripts.OnEnter(PawnAuctionSearch.resultRows[1])
 assert_equals(GameTooltip.auctionItem.index, 1, "live result hover uses auction tooltip")
 PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
@@ -384,6 +401,8 @@ assert_equals(mock.insertedLink, results[1].link, "shift-click links result")
 PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
 PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
 assert_equals(PawnAuctionSearch.bidButton.shown, true, "selected row shows action buttons")
+assert_equals(PawnAuctionSearch.bidButton.enabled, true, "selected row enables Bid action")
+assert_equals(PawnAuctionSearch.buyoutButton.enabled, true, "selected row enables Buyout action")
 assert_equals(
   PawnAuctionSearch.resultRows[1].selectedTexture.shown,
   true,
@@ -764,7 +783,14 @@ assert_equals(
   "Found 1 upgrade auctions from Auctioneer scan data (2 auctions rescored).",
   "Auctioneer scan status shows source"
 )
-assert_equals(PawnAuctionSearch.bidButton.shown, false, "Auctioneer action hidden before selection")
+assert_equals(PawnAuctionSearch.bidButton.shown, true, "Auctioneer Bid action visible")
+assert_equals(PawnAuctionSearch.buyoutButton.shown, true, "Auctioneer Buyout action visible")
+assert_equals(PawnAuctionSearch.bidButton.enabled, false, "Auctioneer Bid disabled before selection")
+assert_equals(
+  PawnAuctionSearch.buyoutButton.enabled,
+  false,
+  "Auctioneer Buyout disabled before selection"
+)
 PawnAuctionSearch.resultRows[1].scripts.OnEnter(PawnAuctionSearch.resultRows[1])
 assert_equals(
   GameTooltip.hyperlink,

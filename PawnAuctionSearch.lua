@@ -4,8 +4,8 @@ _G.PawnAuctionSearch = addon
 addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
-addon.SCALE_DROPDOWN_WIDTH = 160
-addon.ARMOR_DROPDOWN_WIDTH = 140
+addon.SCALE_DROPDOWN_WIDTH = 130
+addon.ARMOR_DROPDOWN_WIDTH = 130
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_STATUS_OFFSET = -185
@@ -493,6 +493,27 @@ function addon:GetScaleLabel(scaleName)
   return scaleName or ""
 end
 
+function addon:GetDisplayScaleLabel(label)
+  label = label or ""
+  local maxLength = 14
+  if string.len(label) <= maxLength then
+    return label
+  end
+  local separatorStart, separatorEnd = string.find(label, ": ", 1, true)
+  if separatorEnd then
+    local prefix = string.sub(label, 1, separatorStart - 1)
+    if string.len(prefix) > 6 then
+      prefix = string.sub(prefix, 1, 5) .. "."
+    end
+    local suffixLength = maxLength - string.len(prefix) - 3
+    if suffixLength > 0 then
+      local suffix = string.sub(label, separatorEnd + 1)
+      return prefix .. ": " .. string.sub(suffix, 1, suffixLength) .. "."
+    end
+  end
+  return string.sub(label, 1, maxLength - 3) .. "..."
+end
+
 
 function addon:UpdateScaleLabel()
   if not self.scaleLabel then
@@ -502,7 +523,7 @@ function addon:UpdateScaleLabel()
   if scaleName == "" then
     self.scaleLabel:SetText("Scale: none selected")
   else
-    self.scaleLabel:SetText("Scale: " .. self:GetScaleLabel(scaleName))
+    self.scaleLabel:SetText("Scale: " .. self:GetDisplayScaleLabel(self:GetScaleLabel(scaleName)))
   end
 end
 
@@ -514,7 +535,7 @@ function addon:SetScale(scaleName)
     UIDropDownMenu_SetSelectedValue(self.scaleDropDown, scaleName)
   end
   if self.scaleDropDown and UIDropDownMenu_SetText then
-    UIDropDownMenu_SetText(self.scaleDropDown, label)
+    UIDropDownMenu_SetText(self.scaleDropDown, self:GetDisplayScaleLabel(label))
   end
   self:UpdateScaleLabel()
 end
@@ -1508,7 +1529,7 @@ function addon:CreateResults(parent)
   )
   bidAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
 
-  closeAction:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, 8)
+  closeAction:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -4, -26)
   closeAction:SetText("Close")
   closeAction:SetScript("OnClick", function()
     if HideUIPanel then
@@ -1526,7 +1547,8 @@ function addon:CreateResults(parent)
   buyoutAction:SetScript("OnClick", function()
     addon:PlaceResultBid(addon:GetActionResultIndex(), true)
   end)
-  buyoutAction:Hide()
+  buyoutAction:Show()
+  buyoutAction:Disable()
   parent.buyoutButton = buyoutAction
   self.buyoutButton = buyoutAction
 
@@ -1535,7 +1557,8 @@ function addon:CreateResults(parent)
   bidAction:SetScript("OnClick", function()
     addon:PlaceResultBid(addon:GetActionResultIndex(), false)
   end)
-  bidAction:Hide()
+  bidAction:Show()
+  bidAction:Disable()
   parent.bidButton = bidAction
   self.bidButton = bidAction
   return rows
@@ -2118,12 +2141,14 @@ function addon:UpdateResults()
     end
   end
   if self.bidButton and self.buyoutButton then
+    self.bidButton:Show()
+    self.buyoutButton:Show()
     if self.selectedResultIndex and results[self.selectedResultIndex] then
-      self.bidButton:Show()
-      self.buyoutButton:Show()
+      self.bidButton:Enable()
+      self.buyoutButton:Enable()
     else
-      self.bidButton:Hide()
-      self.buyoutButton:Hide()
+      self.bidButton:Disable()
+      self.buyoutButton:Disable()
     end
   end
 end
