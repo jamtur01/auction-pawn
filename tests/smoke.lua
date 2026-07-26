@@ -247,6 +247,22 @@ start_scan(PawnAuctionSearch)
 assert_equals(mock.lastAuctionQuery, nil, "cached rescore avoids auction query")
 assert_equals(#get_results(PawnAuctionSearch), 1, "cached upgrade count")
 assert_equals(result_name(get_results(PawnAuctionSearch)[1]), "Upgrade Sword", "cached result")
+
+PawnAuctionSearch.auctionCacheRows = nil
+PawnAuctionSearch.auctionCacheComplete = false
+mock.fastScan = false
+mock.canQuery = true
+mock.lastAuctionQuery = nil
+start_scan(PawnAuctionSearch)
+mock.canQuery = false
+fire_auction_update(PawnAuctionSearch)
+assert_equals(PawnAuctionSearch.auctionCacheComplete, false, "partial cache remains invalid")
+mock.canQuery = true
+mock.lastAuctionQuery = nil
+start_scan(PawnAuctionSearch)
+assert_equals(mock.lastAuctionQuery[7], 0, "partial cache ignored")
+PawnAuctionSearch.scanActive = false
+PawnAuctionSearch.waitingForQuery = false
 PawnAuctionSearch.auctionCacheRows = nil
 mock.fastScan = false
 

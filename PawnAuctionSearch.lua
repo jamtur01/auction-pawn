@@ -859,7 +859,7 @@ function addon:FinishScan(statusSuffix)
 end
 
 function addon:ScoreCachedAuctions()
-  if not self.auctionCacheRows or #self.auctionCacheRows == 0 then
+  if not self.auctionCacheComplete or not self.auctionCacheRows then
     return false
   end
   self.results = {}
@@ -884,6 +884,7 @@ function addon:QueryFastScan()
   self.currentQueryPage = 0
   self.currentAuctionPage = 0
   self.auctionCacheRows = {}
+  self.auctionCacheComplete = false
   QueryAuctionItems("", "", "", nil, nil, nil, 0, false, -1, true)
   self:SetStatus("Fast scanning auction house...")
   return true
@@ -950,6 +951,7 @@ function addon:StartScan()
     return
   end
   self.auctionCacheRows = {}
+  self.auctionCacheComplete = false
   self:QueryScanPage()
 end
 
@@ -980,6 +982,7 @@ function addon:OnAuctionItemListUpdate()
   end
 
   if self.fastScanActive then
+    self.auctionCacheComplete = true
     self:FinishScan("from fast scan")
     return
   end
@@ -991,6 +994,7 @@ function addon:OnAuctionItemListUpdate()
     return
   end
 
+  self.auctionCacheComplete = true
   self:FinishScan()
 end
 
