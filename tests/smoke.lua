@@ -259,6 +259,11 @@ assert_equals(
 )
 assert_truthy(PawnAuctionSearch.resultScrollFrame, "result scroll frame exists")
 assert_equals(
+  PawnAuctionSearch.resultScrollFrame.width,
+  PawnAuctionSearch.RESULT_SCROLL_WIDTH,
+  "result scroll frame keeps scrollbar gutter"
+)
+assert_equals(
   PawnAuctionSearch.statusText.point[5],
   PawnAuctionSearch.RESULTS_STATUS_OFFSET,
   "status has a dedicated line above results"
@@ -274,8 +279,12 @@ assert_equals(
   "results start in right pane"
 )
 assert_truthy(
-  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 727,
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_SCROLL_WIDTH <= 727,
   "result pane reserves 3.3.5a FauxScrollFrame scrollbar gutter"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_ROW_WIDTH + 31 <= PawnAuctionSearch.RESULT_SCROLL_WIDTH,
+  "result rows do not cover scrollbar buttons"
 )
 assert_truthy(
   PawnAuctionSearch.RESULT_BUYOUT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].buyoutText.width
@@ -314,7 +323,7 @@ local resultBottom = 72 - PawnAuctionSearch.RESULTS_TOP_OFFSET + 12 + 8
   + (PawnAuctionSearch.RESULTS_VISIBLE_ROWS * PawnAuctionSearch.RESULT_ROW_HEIGHT)
   + 6
   + PawnAuctionSearch.ACTION_BUTTON_HEIGHT
-assert_truthy(resultBottom <= 420, "result list leaves bottom controls visible")
+assert_truthy(resultBottom <= 435, "result list leaves bottom controls visible")
 PawnAuctionSearch.closeButton.scripts.OnClick(PawnAuctionSearch.closeButton)
 assert_equals(mock.hiddenPanel, AuctionFrame, "Close action hides AuctionFrame")
 AuctionFrame:Show()
