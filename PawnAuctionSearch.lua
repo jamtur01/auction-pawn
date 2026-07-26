@@ -6,14 +6,14 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
-addon.RESULTS_LEFT_OFFSET = 280
+addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_TOP_OFFSET = -220
-addon.RESULT_ROW_WIDTH = 430
-addon.RESULT_NAME_WIDTH = 200
-addon.RESULT_DELTA_OFFSET = 220
-addon.RESULT_PRICE_OFFSET = 300
-addon.RESULT_BID_OFFSET = 365
-addon.RESULT_BUYOUT_OFFSET = 405
+addon.RESULT_ROW_WIDTH = 458
+addon.RESULT_NAME_WIDTH = 170
+addon.RESULT_DELTA_OFFSET = 185
+addon.RESULT_PRICE_OFFSET = 255
+addon.RESULT_BID_OFFSET = 370
+addon.RESULT_BUYOUT_OFFSET = 415
 addon.RESULTS_VISIBLE_ROWS = 4
 addon.RESULT_ROW_HEIGHT = 22
 addon.OPTION_FILTER_ROWS = 6
@@ -1258,16 +1258,16 @@ function addon:CreateResults(parent)
     end
     row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
-    row.priceText:SetWidth(125)
+    row.priceText:SetWidth(105)
     row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.bidButton:SetSize(42, 18)
+    row.bidButton:SetSize(34, 18)
     row.bidButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_OFFSET, 0)
     row.bidButton:SetText("Bid")
     row.bidButton:SetScript("OnClick", function(button)
       addon:PlaceResultBid(button.resultIndex, false)
     end)
     row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.buyoutButton:SetSize(46, 18)
+    row.buyoutButton:SetSize(40, 18)
     row.buyoutButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_OFFSET, 0)
     row.buyoutButton:SetText("Buy")
     row.buyoutButton:SetScript("OnClick", function(button)

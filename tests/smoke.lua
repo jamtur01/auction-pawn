@@ -216,6 +216,25 @@ assert_equals(
   PawnAuctionSearch.RESULTS_LEFT_OFFSET,
   "results start in right pane"
 )
+assert_truthy(
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 718,
+  "result pane fits inset 3.3.5a AuctionFrame width"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].priceText.width
+    <= PawnAuctionSearch.RESULT_BID_OFFSET,
+  "price column ends before Bid button"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_BID_OFFSET + PawnAuctionSearch.resultRows[1].bidButton.width
+    <= PawnAuctionSearch.RESULT_BUYOUT_OFFSET,
+  "Bid button ends before Buy button"
+)
+assert_truthy(
+  PawnAuctionSearch.RESULT_BUYOUT_OFFSET + PawnAuctionSearch.resultRows[1].buyoutButton.width
+    <= PawnAuctionSearch.RESULT_ROW_WIDTH,
+  "Buy button stays inside result row"
+)
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
 fingerControl:SetChecked(false)
