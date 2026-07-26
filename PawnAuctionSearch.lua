@@ -8,18 +8,22 @@ addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_TOP_OFFSET = -210
-addon.RESULT_ROW_WIDTH = 420
-addon.RESULT_NAME_WIDTH = 150
-addon.RESULT_DELTA_OFFSET = 165
-addon.RESULT_PRICE_OFFSET = 220
-addon.RESULT_BID_OFFSET = 250
-addon.RESULT_BUYOUT_OFFSET = 336
+addon.RESULT_ROW_WIDTH = 460
+addon.RESULT_NAME_WIDTH = 170
+addon.RESULT_DELTA_OFFSET = 180
+addon.RESULT_BID_PRICE_OFFSET = 250
+addon.RESULT_BUYOUT_PRICE_OFFSET = 340
+addon.RESULT_BID_OFFSET = 290
+addon.RESULT_BUYOUT_OFFSET = 376
 addon.RESULTS_VISIBLE_ROWS = 3
 addon.RESULT_ROW_HEIGHT = 37
 addon.OPTION_FILTER_ROWS = 6
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
 addon.SLOT_FILTER_ROWS = 8
 addon.SLOT_FILTERS_LEFT_OFFSET = 280
+addon.CHECK_BUTTON_SIZE = 24
+addon.CHECK_BUTTON_ROW_HEIGHT = 24
+addon.TAB_GLOBAL_NAME = "AuctionFrameTabPawnAuctionSearch"
 addon.FAST_SCAN_ROWS_PER_TICK = 250
 addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
@@ -268,10 +272,88 @@ function addon:Print(message)
   end
 end
 
+local function getCheckButtonText(check)
+  local name = check.GetName and check:GetName()
+  return name and _G[name .. "Text"] or nil
+end
+
+function addon:ShowHelpTooltip(owner, title, text)
+  if not GameTooltip then
+    return
+  end
+  GameTooltip:SetOwner(owner or UIParent, "ANCHOR_RIGHT")
+  GameTooltip:ClearLines()
+  if GameTooltip.AddLine then
+    GameTooltip:AddLine(title)
+    GameTooltip:AddLine(text)
+  else
+    GameTooltip:SetHyperlink(title .. ": " .. text)
+  end
+  GameTooltip:Show()
+end
+
+function addon:AttachHelpTooltip(frame, title, text)
+  if not frame or not frame.SetScript then
+    return
+  end
+  frame.tooltipTitle = title
+  frame.tooltipText = text
+  frame:SetScript("OnEnter", function(owner)
+    addon:ShowHelpTooltip(owner, title, text)
+  end)
+  frame:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+end
+
+function addon:RestoreAuctionFrameChrome()
+  if AuctionFrameMoneyFrame then
+    AuctionFrameMoneyFrame:Show()
+  end
+end
+
+function addon:PrepareAuctionFrameChrome()
+  if AuctionFrameMoneyFrame then
+    AuctionFrameMoneyFrame:Hide()
+  end
+  if SetAuctionsTabShowing then
+    SetAuctionsTabShowing(false)
+  end
+end
+
+function addon:IsScanning()
+  return self.scanActive or self.fastScanActive or self.fastScanProcessing
+    or self.auctioneerScanProcessing or self.waitingForQuery or self.pendingSelection
+end
+
+function addon:UpdateSearchButton()
+  if not self.searchButton then
+    return
+  end
+  if self:IsScanning() then
+    self.searchButton:SetText("Cancel")
+    self.searchButton:Enable()
+    return
+  end
+  self.searchButton:SetText("Search")
+  local canQuery = true
+  if CanSendAuctionQuery then
+    canQuery = CanSendAuctionQuery("list") and true or false
+  end
+  if canQuery then
+    self.searchButton:Enable()
+  else
+    self.searchButton:Disable()
+  end
+end
+
 function addon:HideMainFrame()
   if self.mainFrame then
     self.mainFrame:Hide()
   end
+  self:RestoreAuctionFrameChrome()
 end
 
 function addon:HookBlizzardTabs()
@@ -280,7 +362,7 @@ function addon:HookBlizzardTabs()
   end
   if type(AuctionFrameTab_OnClick) == "function" then
     hooksecurefunc("AuctionFrameTab_OnClick", function(tab)
-      if tab ~= _G.AuctionFrameTab4 then
+      if tab ~= addon.auctionTab then
         addon:HideMainFrame()
       end
     end)
@@ -356,24 +438,27 @@ function addon:OnEvent(event, arg1)
 end
 
 function addon:InitializeAuctionTab()
-  if self.auctionTab and _G.AuctionFrameTab4 then
+  if self.auctionTab then
     return
   end
   if not AuctionFrame or not AuctionFrameTab3 then
     return
   end
 
-  local tab = _G.AuctionFrameTab4
-    or CreateFrame("Button", "AuctionFrameTab4", AuctionFrame, "AuctionTabTemplate")
-  tab:SetID(4)
+  local tab = _G[self.TAB_GLOBAL_NAME]
+    or CreateFrame("Button", self.TAB_GLOBAL_NAME, AuctionFrame, "AuctionTabTemplate")
+  local tabID = (AuctionFrame.numTabs or 3) + 1
+  tab:SetID(tabID)
   tab:SetText(self.TAB_LABEL)
-  tab:SetPoint("LEFT", AuctionFrameTab3, "RIGHT", -8, 0)
+  _G["AuctionFrameTab" .. tostring(tabID)] = tab
+  local previousTab = _G["AuctionFrameTab" .. tostring(tabID - 1)] or AuctionFrameTab3
+  tab:SetPoint("LEFT", previousTab, "RIGHT", -8, 0)
   tab:SetScript("OnClick", function(frame)
     addon:SelectAuctionTab(frame:GetID())
   end)
   PanelTemplates_TabResize(tab, 0)
-  PanelTemplates_SetNumTabs(AuctionFrame, 4)
-  AuctionFrame.numTabs = 4
+  PanelTemplates_SetNumTabs(AuctionFrame, tabID)
+  AuctionFrame.numTabs = tabID
 
   self.auctionTab = tab
   self:HookBlizzardTabs()
@@ -396,6 +481,15 @@ function addon:GetScales()
   end
   return scales
 end
+function addon:GetScaleLabel(scaleName)
+  for _, scale in ipairs(self:GetScales()) do
+    if scale.name == scaleName then
+      return scale.label
+    end
+  end
+  return scaleName or ""
+end
+
 
 function addon:UpdateScaleLabel()
   if not self.scaleLabel then
@@ -405,18 +499,19 @@ function addon:UpdateScaleLabel()
   if scaleName == "" then
     self.scaleLabel:SetText("Scale: none selected")
   else
-    self.scaleLabel:SetText("Scale: " .. scaleName)
+    self.scaleLabel:SetText("Scale: " .. self:GetScaleLabel(scaleName))
   end
 end
 
 function addon:SetScale(scaleName)
   self.db = self:EnsureDatabase()
   self.db.scaleName = scaleName
+  local label = self:GetScaleLabel(scaleName)
   if self.scaleDropDown and UIDropDownMenu_SetSelectedValue then
     UIDropDownMenu_SetSelectedValue(self.scaleDropDown, scaleName)
   end
   if self.scaleDropDown and UIDropDownMenu_SetText then
-    UIDropDownMenu_SetText(self.scaleDropDown, scaleName)
+    UIDropDownMenu_SetText(self.scaleDropDown, label)
   end
   self:UpdateScaleLabel()
 end
@@ -425,6 +520,7 @@ function addon:EnsureScaleSelected()
   self.db = self:EnsureDatabase()
   if type(self.db.scaleName) == "string" and self.db.scaleName ~= ""
     and PawnDoesScaleExist(self.db.scaleName) then
+    self:SetScale(self.db.scaleName)
     return true
   end
   local scales = self:GetScales()
@@ -439,6 +535,11 @@ function addon:CreateScaleSelector(parent)
   local label = parent:CreateFontString("PawnAuctionSearchScaleLabel", "ARTWORK", "GameFontNormal")
   label:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
   self.scaleLabel = label
+  self:AttachHelpTooltip(
+    label,
+    "Pawn scale",
+    "The Pawn scale that will be used to determine the item value"
+  )
 
   local dropdown = CreateFrame(
     "Frame",
@@ -457,13 +558,18 @@ function addon:CreateScaleSelector(parent)
         local info = UIDropDownMenu_CreateInfo()
         info.text = scale.label
         info.value = scale.name
-        info.func = function()
-          addon:SetScale(scale.name)
+        info.func = function(button)
+          addon:SetScale(button.value)
         end
         UIDropDownMenu_AddButton(info)
       end
     end)
   end
+  self:AttachHelpTooltip(
+    dropdown,
+    "Pawn scale",
+    "The Pawn scale that will be used to determine the item value"
+  )
   self:EnsureScaleSelected()
   self:UpdateScaleLabel()
   return dropdown
@@ -923,6 +1029,18 @@ local function formatScore(score)
   return string.format("+%.2f", score or 0)
 end
 
+local function formatResultBid(addon, result)
+  return formatCopper(addon:GetBidPrice(result))
+end
+
+local function formatResultBuyout(addon, result)
+  local buyout = addon:GetBuyoutPrice(result)
+  if buyout and buyout > 0 then
+    return formatCopper(buyout)
+  end
+  return "No buyout"
+end
+
 local function formatResultPrices(addon, result)
   local bid = formatCopper(addon:GetBidPrice(result))
   local buyout = addon:GetBuyoutPrice(result)
@@ -935,17 +1053,16 @@ end
 local function sortByScore(left, right)
   return (left.score or 0) > (right.score or 0)
 end
-
 function addon:SelectAuctionTab(index)
-  if index ~= 4 then
+  if not self.auctionTab or index ~= self.auctionTab:GetID() then
     self:CancelActiveScan("Auction tab changed; scan canceled.")
     self:HideMainFrame()
-    if AuctionFrameTab_OnClick then
+    if AuctionFrameTab_OnClick and _G["AuctionFrameTab" .. tostring(index)] then
       AuctionFrameTab_OnClick(_G["AuctionFrameTab" .. tostring(index)])
     end
     return
   end
-  PanelTemplates_SetTab(AuctionFrame, 4)
+  PanelTemplates_SetTab(AuctionFrame, self.auctionTab:GetID())
   if AuctionFrameBrowse then
     AuctionFrameBrowse:Hide()
   end
@@ -955,9 +1072,11 @@ function addon:SelectAuctionTab(index)
   if AuctionFrameAuctions then
     AuctionFrameAuctions:Hide()
   end
+  self:PrepareAuctionFrameChrome()
   self:CreateMainFrame()
   self.mainFrame:Show()
   AuctionFrame.type = "list"
+  self:UpdateSearchButton()
 end
 function addon:SetOption(key, enabled)
   self.db = self:EnsureDatabase()
@@ -967,6 +1086,9 @@ end
 function addon:SetArmorPreference(value)
   self.db = self:EnsureDatabase()
   self.db.armorPreference = value or ""
+  if self.armorDropDown and UIDropDownMenu_SetSelectedValue then
+    UIDropDownMenu_SetSelectedValue(self.armorDropDown, self.db.armorPreference)
+  end
   if self.armorDropDown and UIDropDownMenu_SetText then
     UIDropDownMenu_SetText(self.armorDropDown, self:GetArmorPreferenceLabel())
   end
@@ -982,7 +1104,7 @@ function addon:GetArmorPreferenceLabel()
   return "No Preference"
 end
 
-local function addOptionCheckButton(addon, parent, key, label, index, title)
+local function addOptionCheckButton(addon, parent, option, index, title)
   local check = CreateFrame(
     "CheckButton",
     "PawnAuctionSearchOption" .. index,
@@ -991,21 +1113,23 @@ local function addOptionCheckButton(addon, parent, key, label, index, title)
   )
   local column = math.floor((index - 1) / addon.OPTION_FILTER_ROWS)
   local row = (index - 1) % addon.OPTION_FILTER_ROWS
-  check:SetSize(20, 20)
+  check:SetSize(addon.CHECK_BUTTON_SIZE, addon.CHECK_BUTTON_SIZE)
   check:SetPoint(
     "TOPLEFT",
     title,
     "BOTTOMLEFT",
     column * addon.OPTION_FILTER_COLUMN_WIDTH,
-    -4 - (row * 20)
+    -4 - (row * addon.CHECK_BUTTON_ROW_HEIGHT)
   )
-  check:SetChecked(addon.db and addon.db[key])
-  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
-  check.labelText:SetText(label)
+  check:SetChecked(addon.db and addon.db[option.key])
+  check.labelText = getCheckButtonText(check) or check:CreateFontString(nil, "ARTWORK")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 0, 0)
+  check.labelText:SetText(option.label)
   check:SetScript("OnClick", function(button)
-    addon:SetOption(key, button:GetChecked())
+    addon:SetOption(option.key, button:GetChecked())
   end)
+  addon:AttachHelpTooltip(check, option.label, option.tip)
+  addon:AttachHelpTooltip(check.labelText, option.label, option.tip)
   parent.optionControls[index] = check
   return check
 end
@@ -1018,6 +1142,11 @@ function addon:CreateArmorPreferenceSelector(parent, anchor)
   )
   label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
   label:SetText("Armor Preference")
+  self:AttachHelpTooltip(
+    label,
+    "Armor Preference",
+    "Only show the selected armor type in search results.  Filter out all other armor types."
+  )
 
   local dropdown = CreateFrame(
     "Frame",
@@ -1036,16 +1165,24 @@ function addon:CreateArmorPreferenceSelector(parent, anchor)
         local info = UIDropDownMenu_CreateInfo()
         info.text = option.label
         info.value = option.key
-        info.func = function()
-          addon:SetArmorPreference(option.key)
+        info.func = function(button)
+          addon:SetArmorPreference(button.value)
         end
         UIDropDownMenu_AddButton(info)
       end
     end)
   end
+  if UIDropDownMenu_SetSelectedValue then
+    UIDropDownMenu_SetSelectedValue(dropdown, self.db and self.db.armorPreference or "")
+  end
   if UIDropDownMenu_SetText then
     UIDropDownMenu_SetText(dropdown, self:GetArmorPreferenceLabel())
   end
+  self:AttachHelpTooltip(
+    dropdown,
+    "Armor Preference",
+    "Only show the selected armor type in search results.  Filter out all other armor types."
+  )
   return dropdown
 end
 
@@ -1063,14 +1200,36 @@ function addon:CreateOptionControls(parent, anchor)
   title:SetText("Options")
   parent.optionControls = {}
   local options = {
-    { key = "canUse", label = "Useable items only" },
-    { key = "affordable", label = "Only what I can afford" },
-    { key = "useBuyout", label = "Use buyout" },
-    { key = "bestPrice", label = "Adjust score based on price" },
-    { key = "unenchanted", label = "Use unenchanted values" },
+    {
+      key = "canUse",
+      label = "Useable items only",
+      tip = "Only items that your character can use.",
+    },
+    {
+      key = "affordable",
+      label = "Only what I can afford",
+      tip = "Only show what you can currently afford to buy.",
+    },
+    {
+      key = "useBuyout",
+      label = "Use buyout",
+      tip = "Use buyout instead of bid when checking auction prices.",
+    },
+    {
+      key = "bestPrice",
+      label = "Adjust score based on price",
+      tip = "Adjust the score returned by the price of the item.  For similar items, "
+        .. "the cheaper item will be higher on the list.",
+    },
+    {
+      key = "unenchanted",
+      label = "Use unenchanted values",
+      tip = "Use unenchanted values for calculations. If not checked, item values "
+        .. "will include current enchantements.",
+    },
   }
   for index, option in ipairs(options) do
-    addOptionCheckButton(self, parent, option.key, option.label, index, title)
+    addOptionCheckButton(self, parent, option, index, title)
   end
   local armorAnchor = parent.optionControls[#parent.optionControls] or title
   parent.optionsBottom = self:CreateArmorPreferenceSelector(parent, armorAnchor)
@@ -1088,21 +1247,24 @@ local function addSlotFilterCheckButton(addon, parent, filter, index, title, vis
     parent,
     "UICheckButtonTemplate"
   )
-  check:SetSize(20, 20)
+  check:SetSize(addon.CHECK_BUTTON_SIZE, addon.CHECK_BUTTON_SIZE)
   check:SetPoint(
     "TOPLEFT",
     title,
     "BOTTOMLEFT",
     column * addon.SLOT_FILTER_COLUMN_WIDTH,
-    -4 - (row * 20)
+    -4 - (row * addon.CHECK_BUTTON_ROW_HEIGHT)
   )
   check:SetChecked(addon:IsSlotFilterEnabled(filter))
-  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
+  check.labelText = getCheckButtonText(check) or check:CreateFontString(nil, "ARTWORK")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 0, 0)
   check.labelText:SetText(filter.label)
   check:SetScript("OnClick", function(button)
     addon:SetSlotFilter(filter, button:GetChecked())
   end)
+  local tip = "Include this equipment slot when searching for upgrades."
+  addon:AttachHelpTooltip(check, filter.label, tip)
+  addon:AttachHelpTooltip(check.labelText, filter.label, tip)
   parent.slotControls[index] = check
 end
 
@@ -1116,21 +1278,31 @@ local function addForceTwoHandCheckButton(addon, parent, title, visualIndex)
     parent,
     "UICheckButtonTemplate"
   )
-  check:SetSize(20, 20)
+  check:SetSize(addon.CHECK_BUTTON_SIZE, addon.CHECK_BUTTON_SIZE)
   check:SetPoint(
     "TOPLEFT",
     title,
     "BOTTOMLEFT",
     column * addon.SLOT_FILTER_COLUMN_WIDTH,
-    -4 - (row * 20)
+    -4 - (row * addon.CHECK_BUTTON_ROW_HEIGHT)
   )
   check:SetChecked(addon.db and addon.db.force2h)
-  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
+  check.labelText = getCheckButtonText(check) or check:CreateFontString(nil, "ARTWORK")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 0, 0)
   check.labelText:SetText("Only 2H Weapons")
   check:SetScript("OnClick", function(button)
     addon:SetOption("force2h", button:GetChecked())
   end)
+  addon:AttachHelpTooltip(
+    check,
+    "Only 2H Weapons",
+    "When comparing weapons, only consider 2-Handed Weapons."
+  )
+  addon:AttachHelpTooltip(
+    check.labelText,
+    "Only 2H Weapons",
+    "When comparing weapons, only consider 2-Handed Weapons."
+  )
   parent.forceTwoHandControl = check
   addon.forceTwoHandControl = check
 end
@@ -1181,14 +1353,21 @@ function addon:CreateMainFrame()
   button:SetPoint("TOPLEFT", self.scaleDropDown or frame, "BOTTOMLEFT", 16, -28)
   button:SetText("Search")
   button:SetScript("OnClick", function()
+    if addon:IsScanning() then
+      addon:CancelActiveScan("Scan canceled.")
+      addon:UpdateSearchButton()
+      return
+    end
     addon:StartScan()
   end)
   frame.searchButton = button
+  self.searchButton = button
 
   self:CreateOptionControls(frame, button)
   self:CreateSlotFilters(frame, button)
   self.resultRows = self:CreateResults(frame)
   self.mainFrame = frame
+  self:UpdateSearchButton()
   return frame
 end
 
@@ -1211,9 +1390,13 @@ function addon:CreateResults(parent)
   scoreHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_DELTA_OFFSET, 0)
   scoreHeader:SetText("Pawn")
 
-  local priceHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  priceHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_PRICE_OFFSET, 0)
-  priceHeader:SetText("Price")
+  local bidHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  bidHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_BID_PRICE_OFFSET, 0)
+  bidHeader:SetText("Bid")
+
+  local buyoutHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  buyoutHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_BUYOUT_PRICE_OFFSET, 0)
+  buyoutHeader:SetText("Buyout")
 
   local scrollFrame = CreateFrame(
     "ScrollFrame",
@@ -1245,7 +1428,7 @@ function addon:CreateResults(parent)
     end
     row:RegisterForClicks("LeftButtonUp")
     row:SetScript("OnClick", function(button)
-      addon:SelectResult(button.resultIndex)
+      addon:HandleResultClick(button.resultIndex)
     end)
     row:SetScript("OnEnter", function(button)
       addon:ShowResultTooltip(button.resultIndex, button)
@@ -1255,6 +1438,12 @@ function addon:CreateResults(parent)
         GameTooltip:Hide()
       end
     end)
+    row.selectedTexture = row:CreateTexture(nil, "BACKGROUND")
+    row.selectedTexture:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    if row.selectedTexture.SetAllPoints then
+      row.selectedTexture:SetAllPoints(row)
+    end
+    row.selectedTexture:Hide()
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
     row.nameText:SetWidth(self.RESULT_NAME_WIDTH)
@@ -1264,9 +1453,12 @@ function addon:CreateResults(parent)
     if row.deltaText.SetJustifyH then
       row.deltaText:SetJustifyH("RIGHT")
     end
-    row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
-    row.priceText:SetWidth(105)
+    row.bidText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    row.bidText:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_PRICE_OFFSET, 0)
+    row.bidText:SetWidth(82)
+    row.buyoutText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    row.buyoutText:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_PRICE_OFFSET, 0)
+    row.buyoutText:SetWidth(92)
     row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.bidButton:Hide()
     row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
@@ -1315,6 +1507,7 @@ function addon:SetStatus(message)
   if self.statusText then
     self.statusText:SetText(message)
   end
+  self:UpdateSearchButton()
 end
 
 function addon:ShowResultTooltip(resultIndex, owner)
@@ -1324,8 +1517,36 @@ function addon:ShowResultTooltip(resultIndex, owner)
   end
   GameTooltip:SetOwner(owner or UIParent, "ANCHOR_RIGHT")
   GameTooltip:ClearLines()
-  GameTooltip:SetHyperlink(result.link)
+  local liveIndex = result.index
+  local live = liveIndex and result.page == self.currentAuctionPage
+    and self:CurrentAuctionMatchesResult(liveIndex, result)
+  if live and GameTooltip.SetAuctionItem then
+    GameTooltip:SetAuctionItem("list", liveIndex)
+  else
+    GameTooltip:SetHyperlink(result.link)
+    if GameTooltip.AddLine then
+      GameTooltip:AddLine("Stack: " .. tostring(result.count or 1))
+      GameTooltip:AddLine("Bid: " .. formatResultBid(self, result))
+      GameTooltip:AddLine("Buyout: " .. formatResultBuyout(self, result))
+    end
+  end
   GameTooltip:Show()
+end
+
+function addon:HandleResultClick(resultIndex)
+  local result = self.results and self.results[resultIndex]
+  if not result then
+    return
+  end
+  if IsShiftKeyDown and IsShiftKeyDown() and ChatEdit_InsertLink then
+    ChatEdit_InsertLink(result.link)
+    return
+  end
+  if IsAltKeyDown and IsAltKeyDown() and QueryAuctionItems then
+    QueryAuctionItems(result.auctionName or result.name or "")
+    return
+  end
+  self:SelectResult(resultIndex)
 end
 
 function addon:GetActionResultIndex()
@@ -1648,6 +1869,7 @@ function addon:QueryScanPage()
 end
 
 function addon:OnUpdate(elapsed)
+  self:UpdateSearchButton()
   if self.auctioneerScanProcessing then
     self:ProcessAuctioneerScanBatch()
     return
@@ -1793,14 +2015,22 @@ function addon:UpdateResults()
       self.RESULT_ROW_HEIGHT
     )
   end
-  if self.selectedResultIndex and not results[self.selectedResultIndex] then
-    self.selectedResultIndex = nil
-  end
 
   local offset = 0
   if self.resultScrollFrame and FauxScrollFrame_GetOffset then
     offset = FauxScrollFrame_GetOffset(self.resultScrollFrame) or 0
   end
+  if self.selectedResultIndex and not results[self.selectedResultIndex] then
+    self.selectedResultIndex = nil
+  end
+  if self.selectedResultIndex then
+    local firstVisible = offset + 1
+    local lastVisible = offset + displayRows
+    if self.selectedResultIndex < firstVisible or self.selectedResultIndex > lastVisible then
+      self.selectedResultIndex = nil
+    end
+  end
+
   for displayIndex = 1, displayRows do
     local row = self.resultRows[displayIndex]
     local resultIndex = offset + displayIndex
@@ -1811,7 +2041,21 @@ function addon:UpdateResults()
       row.buyoutButton.resultIndex = resultIndex
       row.nameText:SetText(result.link or result.name or "")
       row.deltaText:SetText(formatScore(result.score))
-      row.priceText:SetText(formatResultPrices(self, result))
+      row.bidText:SetText(formatResultBid(self, result))
+      row.buyoutText:SetText(formatResultBuyout(self, result))
+      if row.selectedTexture then
+        if resultIndex == self.selectedResultIndex then
+          row.selectedTexture:Show()
+          if row.LockHighlight then
+            row:LockHighlight()
+          end
+        else
+          row.selectedTexture:Hide()
+          if row.UnlockHighlight then
+            row:UnlockHighlight()
+          end
+        end
+      end
       row.bidButton:Hide()
       row.buyoutButton:Hide()
       row:Show()
@@ -1821,7 +2065,14 @@ function addon:UpdateResults()
       row.buyoutButton.resultIndex = nil
       row.nameText:SetText("")
       row.deltaText:SetText("")
-      row.priceText:SetText("")
+      row.bidText:SetText("")
+      row.buyoutText:SetText("")
+      if row.selectedTexture then
+        row.selectedTexture:Hide()
+      end
+      if row.UnlockHighlight then
+        row:UnlockHighlight()
+      end
       row.bidButton:Hide()
       row.buyoutButton:Hide()
       row:Hide()

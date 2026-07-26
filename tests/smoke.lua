@@ -145,12 +145,16 @@ assert_truthy(
 
 PawnAuctionSearch:InitializeAuctionTab()
 assert_equals(AuctionFrame.numTabs, 4, "AuctionFrame tab count")
-assert_truthy(AuctionFrameTab4, "AuctionFrameTab4 exists")
-assert_equals(AuctionFrameTab4:GetText(), "Pawn", "Pawn tab text")
-PawnAuctionSearch:SelectAuctionTab(4)
+assert_truthy(AuctionFrameTabPawnAuctionSearch, "Pawn unique tab exists")
+assert_equals(AuctionFrameTab4, AuctionFrameTabPawnAuctionSearch, "Pawn indexed tab alias exists")
+assert_equals(AuctionFrameTabPawnAuctionSearch:GetText(), "Pawn", "Pawn tab text")
+PawnAuctionSearch:SelectAuctionTab(AuctionFrameTabPawnAuctionSearch:GetID())
 assert_truthy(PawnAuctionSearch.mainFrame:IsShown(), "Pawn frame shown after selecting tab")
+assert_equals(AuctionFrameMoneyFrame:IsShown(), false, "Pawn tab hides money frame")
+assert_equals(mock.auctionsTabShowing, false, "Pawn tab hides owner chrome")
 AuctionFrameTab_OnClick(AuctionFrameTab1)
 assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden on Browse tab")
+assert_equals(AuctionFrameMoneyFrame:IsShown(), true, "Browse tab restores money frame")
 
 
 local scales = discover_scales(PawnAuctionSearch)
@@ -167,6 +171,18 @@ PawnAuctionSearch.forceTwoHandControl.scripts.OnClick(PawnAuctionSearch.forceTwo
 assert_equals(PawnAuctionSearchDB.force2h, false, "force 2H control clears")
 assert_equals(PawnAuctionSearchDB.useBuyout, false, "use buyout defaults off")
 local buyoutControl = find_option_control(PawnAuctionSearch, "Use buyout")
+assert_equals(buyoutControl.width, PawnAuctionSearch.CHECK_BUTTON_SIZE, "option check width")
+assert_equals(buyoutControl.height, PawnAuctionSearch.CHECK_BUTTON_SIZE, "option check height")
+assert_equals(
+  buyoutControl.labelText,
+  _G.PawnAuctionSearchOption3Text,
+  "option uses native check label"
+)
+assert_equals(
+  buyoutControl.tooltipText,
+  "Use buyout instead of bid when checking auction prices.",
+  "option help tooltip"
+)
 buyoutControl:SetChecked(true)
 buyoutControl.scripts.OnClick(buyoutControl)
 assert_equals(PawnAuctionSearchDB.useBuyout, true, "use buyout option persists")
@@ -179,6 +195,17 @@ assert_equals(
   PawnAuctionSearch.scaleDropDown.width,
   PawnAuctionSearch.SCALE_DROPDOWN_WIDTH,
   "scale dropdown width"
+)
+assert_equals(PawnAuctionSearch.scaleDropDown.text, "TestScale", "scale dropdown text set")
+assert_equals(
+  PawnAuctionSearch.scaleDropDown.selectedValue,
+  "TestScale",
+  "scale dropdown value set"
+)
+assert_equals(
+  PawnAuctionSearch.armorDropDown.selectedValue,
+  "",
+  "armor dropdown selected value set"
 )
 assert_equals(
   #PawnAuctionSearch.slotControls,
@@ -217,13 +244,13 @@ assert_equals(
   "results start in right pane"
 )
 assert_truthy(
-  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 686,
+  PawnAuctionSearch.RESULTS_LEFT_OFFSET + PawnAuctionSearch.RESULT_ROW_WIDTH <= 727,
   "result pane reserves 3.3.5a FauxScrollFrame scrollbar gutter"
 )
 assert_truthy(
-  PawnAuctionSearch.RESULT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].priceText.width
+  PawnAuctionSearch.RESULT_BUYOUT_PRICE_OFFSET + PawnAuctionSearch.resultRows[1].buyoutText.width
     <= PawnAuctionSearch.RESULT_ROW_WIDTH,
-  "price column stays inside result row"
+  "buyout price column stays inside result row"
 )
 assert_truthy(
   PawnAuctionSearch.RESULT_BID_OFFSET + PawnAuctionSearch.bidButton.width
@@ -242,6 +269,12 @@ local resultBottom = 72 - PawnAuctionSearch.RESULTS_TOP_OFFSET + 12 + 8
 assert_truthy(resultBottom <= 447, "result rows and actions stay inside AuctionFrame")
 
 local fingerControl = find_slot_control(PawnAuctionSearch, "Finger")
+mock.canQuery = false
+PawnAuctionSearch:OnUpdate(0)
+assert_equals(PawnAuctionSearch.searchButton.enabled, false, "search disables while throttled")
+mock.canQuery = true
+PawnAuctionSearch:OnUpdate(0)
+assert_equals(PawnAuctionSearch.searchButton.enabled, true, "search enables when query ready")
 fingerControl:SetChecked(false)
 fingerControl.scripts.OnClick(fingerControl)
 assert_equals(PawnAuctionSearchDB.slots.Finger0Slot, false, "finger 0 disabled")
@@ -290,17 +323,25 @@ assert_equals(#results, 1, "upgrade result count")
 assert_equals(result_name(results[1]), "Upgrade Sword", "upgrade result name")
 assert_equals(result_delta(results[1]), 20, "upgrade result delta")
 assert_equals(PawnAuctionSearch.resultRows[1].deltaText.text, "+20.00", "pawn score formatted")
-assert_equals(
-  PawnAuctionSearch.resultRows[1].priceText.text,
-  "Bid 1g 0s 0c / Buy 2g 0s 0c",
-  "bid and buyout prices shown"
-)
+assert_equals(PawnAuctionSearch.resultRows[1].bidText.text, "1g 0s 0c", "bid price shown")
+assert_equals(PawnAuctionSearch.resultRows[1].buyoutText.text, "2g 0s 0c", "buyout price shown")
 assert_equals(PawnAuctionSearch.bidButton.shown, false, "action buttons hidden before selection")
 PawnAuctionSearch.resultRows[1].scripts.OnEnter(PawnAuctionSearch.resultRows[1])
-assert_equals(GameTooltip.hyperlink, results[1].link, "result hover shows item tooltip")
+assert_equals(GameTooltip.auctionItem.index, 1, "live result hover uses auction tooltip")
+PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
+mock.shiftKeyDown = true
+PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
+mock.shiftKeyDown = false
+assert_equals(mock.insertedLink, results[1].link, "shift-click links result")
 PawnAuctionSearch.resultRows[1].scripts.OnLeave(PawnAuctionSearch.resultRows[1])
 PawnAuctionSearch.resultRows[1].scripts.OnClick(PawnAuctionSearch.resultRows[1])
 assert_equals(PawnAuctionSearch.bidButton.shown, true, "selected row shows action buttons")
+assert_equals(
+  PawnAuctionSearch.resultRows[1].selectedTexture.shown,
+  true,
+  "selected row shows highlight"
+)
+assert_equals(PawnAuctionSearch.resultRows[1].highlightLocked, true, "selected row locks highlight")
 mock.staticPopupName = nil
 PawnAuctionSearch.bidButton.scripts.OnClick(PawnAuctionSearch.bidButton)
 assert_equals(_G.selectedAuction, 1, "bid action selects verified row")
@@ -312,8 +353,8 @@ results[1].buyoutPrice = 0
 mock.auctions[1].buyoutPrice = 0
 PawnAuctionSearch:UpdateResults()
 assert_equals(
-  PawnAuctionSearch.resultRows[1].priceText.text,
-  "Bid 1g 0s 0c / No buyout",
+  PawnAuctionSearch.resultRows[1].buyoutText.text,
+  "No buyout",
   "missing buyout shown explicitly"
 )
 mock.staticPopupName = nil

@@ -93,6 +93,10 @@ end
 function Frame:GetValue()
   return self.value
 end
+function Frame:SetAllPoints(frame)
+  self.allPoints = frame
+end
+
 
 function Frame:SetOwner(owner, anchor)
   self.owner = owner
@@ -110,6 +114,16 @@ end
 
 function Frame:NumLines()
   return #(self.lines or {})
+end
+
+function Frame:AddLine(line)
+  self.lines = self.lines or {}
+  table.insert(self.lines, line)
+end
+
+function Frame:SetAuctionItem(listType, index)
+  self.auctionItem = {listType = listType, index = index}
+  self.lines = {"auction:" .. tostring(index)}
 end
 
 function Frame:SetTexture(texture)
@@ -200,6 +214,14 @@ function Frame:RegisterForClicks(...)
   self.clicks = {...}
 end
 
+function Frame:LockHighlight()
+  self.highlightLocked = true
+end
+
+function Frame:UnlockHighlight()
+  self.highlightLocked = false
+end
+
 function Frame:CreateTexture(name)
   return mock.create_frame("Texture", name, self)
 end
@@ -241,6 +263,9 @@ function mock.create_frame(frameType, name, parent, template)
     end
     if template == "FauxScrollFrameTemplate" then
       _G[name .. "ScrollBar"] = mock.create_frame("Slider", name .. "ScrollBar", frame)
+    end
+    if template == "UICheckButtonTemplate" then
+      _G[name .. "Text"] = mock.create_frame("FontString", name .. "Text", frame)
     end
   end
   return frame
@@ -380,6 +405,22 @@ function FauxScrollFrame_OnVerticalScroll(frame, value, itemHeight, updateFuncti
     updateFunction(frame)
   end
 end
+function IsShiftKeyDown()
+  return mock.shiftKeyDown
+end
+
+function IsAltKeyDown()
+  return mock.altKeyDown
+end
+
+function ChatEdit_InsertLink(link)
+  mock.insertedLink = link
+end
+
+function SetAuctionsTabShowing(shown)
+  mock.auctionsTabShowing = shown
+end
+
 
 function MoneyFrame_Update(frameName, amount)
   local frame = type(frameName) == "table" and frameName or _G[frameName]
@@ -663,6 +704,10 @@ function mock.reset()
   mock.mainHandItemId = 9001
   mock.offHandItemId = nil
   mock.knownSpells = {}
+  mock.shiftKeyDown = false
+  mock.altKeyDown = false
+  mock.insertedLink = nil
+  mock.auctionsTabShowing = nil
   mock.staticPopupName = nil
   mock.selectedAuctionList = nil
   _G.selectedAuction = nil
@@ -700,6 +745,7 @@ function mock.reset()
   AuctionFrameBrowse = mock.create_frame("Frame", "AuctionFrameBrowse", AuctionFrame)
   AuctionFrameBid = mock.create_frame("Frame", "AuctionFrameBid", AuctionFrame)
   AuctionFrameAuctions = mock.create_frame("Frame", "AuctionFrameAuctions", AuctionFrame)
+  AuctionFrameMoneyFrame = mock.create_frame("Frame", "AuctionFrameMoneyFrame", AuctionFrame)
   AuctionFrameTab1 = mock.create_frame("Button", "AuctionFrameTab1", AuctionFrame)
   AuctionFrameTab2 = mock.create_frame("Button", "AuctionFrameTab2", AuctionFrame)
   AuctionFrameTab3 = mock.create_frame("Button", "AuctionFrameTab3", AuctionFrame)
