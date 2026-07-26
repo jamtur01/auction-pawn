@@ -205,6 +205,11 @@ assert_equals(
   "scale header starts below top frame edge"
 )
 assert_equals(
+  PawnAuctionSearch.scaleLabel.point[4],
+  PawnAuctionSearch.LEFT_CONTROLS_LEFT_OFFSET,
+  "scale header uses sidebar left nudge"
+)
+assert_equals(
   PawnAuctionSearch.armorDropDown.width,
   PawnAuctionSearch.ARMOR_DROPDOWN_WIDTH,
   "armor dropdown width"
@@ -215,14 +220,52 @@ assert_equals(
   "TestScale",
   "scale dropdown value set"
 )
+for index = 1, 13 do
+  mock.scales[index] = {
+    Name = "Scale" .. tostring(index),
+    LocalizedName = "Scale " .. tostring(index),
+    PerCharacterOptions = {Visible = true},
+  }
+end
+PawnAuctionSearch.scaleMenuOffset = 1
+UIDropDownMenu_Initialize(
+  PawnAuctionSearch.scaleDropDown,
+  PawnAuctionSearch.scaleDropDown.initialize
+)
+assert_equals(#mock.dropdownButtons, 7, "scale dropdown page stays short")
+assert_equals(
+  mock.dropdownButtons[7].info.text,
+  "More scales...",
+  "scale dropdown has next page"
+)
+assert_equals(mock.dropdownButtons[7].info.keepShownOnClick, 1, "scale paging stays open")
+mock.dropdownButtons[7].info.func()
+assert_equals(mock.reopenedDropdown, PawnAuctionSearch.scaleDropDown, "scale paging reopens menu")
+assert_equals(mock.dropdownButtons[1].info.text, "Previous scales...", "second page has previous")
+assert_equals(mock.dropdownButtons[2].info.value, "Scale7", "second page starts at scale 7")
+assert_equals(mock.dropdownButtons[7].info.text, "More scales...", "second page has next")
+mock.dropdownButtons[7].info.func()
+assert_equals(mock.dropdownButtons[1].info.text, "Previous scales...", "third page has previous")
+assert_equals(mock.dropdownButtons[2].info.value, "Scale12", "third page starts at scale 12")
+mock.dropdownButtons[1].info.func()
+assert_equals(mock.dropdownButtons[2].info.value, "Scale7", "previous returns to second page")
+assert_equals(mock.dropdownButtons[5].info.value, "Scale10", "later scale is reachable")
+mock.dropdownButtons[5].info.func({ value = "Scale10" })
+assert_equals(PawnAuctionSearchDB.scaleName, "Scale10", "later scale can be selected")
+mock.scales = {}
+PawnAuctionSearch:SetScale("TestScale")
+UIDropDownMenu_Initialize(
+  PawnAuctionSearch.scaleDropDown,
+  PawnAuctionSearch.scaleDropDown.initialize
+)
 assert_equals(
   PawnAuctionSearch:GetDisplayScaleLabel("Rogue: assassination"),
   "Rogue: assass.",
   "long scale labels are shortened for display"
 )
 assert_equals(
-  PawnAuctionSearch:GetDisplayScaleLabel("Рога: убийство"),
-  "Рога: убийст.",
+  PawnAuctionSearch:GetDisplayScaleLabel("Рога: убийствование"),
+  "Рога: убийств.",
   "localized scale labels are shortened by UTF-8 characters"
 )
 assert_truthy(

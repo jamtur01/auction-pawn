@@ -5,6 +5,7 @@ addon.ADDON_NAME = "PawnAuctionSearch"
 addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
+addon.SCALE_DROPDOWN_PAGE_SIZE = 7
 addon.ARMOR_DROPDOWN_WIDTH = 130
 addon.LEFT_CONTROLS_TOP_OFFSET = -32
 addon.LEFT_CONTROLS_LEFT_OFFSET = 1
@@ -598,6 +599,55 @@ function addon:EnsureScaleSelected()
   self:SetScale(scales[1].name)
   return true
 end
+function addon:AddScaleDropdownButton(scale)
+  local info = UIDropDownMenu_CreateInfo()
+  info.text = scale.label
+  info.value = scale.name
+  info.func = function(button)
+    addon:SetScale(button.value)
+  end
+  UIDropDownMenu_AddButton(info)
+end
+
+function addon:AddScalePageButton(text, offset)
+  local info = UIDropDownMenu_CreateInfo()
+  info.text = text
+  info.keepShownOnClick = 1
+  info.func = function()
+    addon.scaleMenuOffset = offset
+    if DropDownList1 and DropDownList1.Hide then
+      DropDownList1:Hide()
+    end
+    if ToggleDropDownMenu then
+      ToggleDropDownMenu(1, nil, addon.scaleDropDown)
+    end
+  end
+  UIDropDownMenu_AddButton(info)
+end
+
+function addon:InitializeScaleDropdown()
+  local scales = self:GetScales()
+  local offset = self.scaleMenuOffset or 1
+  local maxScaleButtons = self.SCALE_DROPDOWN_PAGE_SIZE
+  if offset > 1 then
+    maxScaleButtons = maxScaleButtons - 1
+    local previousOffset = 1
+    if offset > self.SCALE_DROPDOWN_PAGE_SIZE then
+      previousOffset = offset - (self.SCALE_DROPDOWN_PAGE_SIZE - 2)
+    end
+    self:AddScalePageButton("Previous scales...", previousOffset)
+  end
+  local hasNext = offset + maxScaleButtons <= #scales
+  if hasNext then
+    maxScaleButtons = maxScaleButtons - 1
+  end
+  for index = offset, math.min(#scales, offset + maxScaleButtons - 1) do
+    self:AddScaleDropdownButton(scales[index])
+  end
+  if hasNext then
+    self:AddScalePageButton("More scales...", offset + maxScaleButtons)
+  end
+end
 
 function addon:CreateScaleSelector(parent)
   local label = parent:CreateFontString("PawnAuctionSearchScaleLabel", "ARTWORK", "GameFontNormal")
@@ -628,15 +678,7 @@ function addon:CreateScaleSelector(parent)
   end
   if UIDropDownMenu_Initialize then
     UIDropDownMenu_Initialize(dropdown, function()
-      for _, scale in ipairs(addon:GetScales()) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = scale.label
-        info.value = scale.name
-        info.func = function(button)
-          addon:SetScale(button.value)
-        end
-        UIDropDownMenu_AddButton(info)
-      end
+      addon:InitializeScaleDropdown()
     end)
   end
   self:AttachDropdownHelpTooltip(
@@ -1451,11 +1493,7 @@ function addon:CreateMainFrame()
   return frame
 end
 
-function addon:CreateResults(parent)
-  if self.resultRows then
-    return self.resultRows
-  end
-  local rows = {}
+function addon:CreateResultsHeaderAndScroll(parent)
   local header = parent:CreateFontString(
     "PawnAuctionSearchResultsHeader",
     "ARTWORK",
@@ -1496,65 +1534,66 @@ function addon:CreateResults(parent)
   end)
   parent.resultScrollFrame = scrollFrame
   self.resultScrollFrame = scrollFrame
+  return scrollFrame
+end
 
-  local previous
-  for index = 1, self.RESULTS_VISIBLE_ROWS do
-    local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
-    row:SetSize(self.RESULT_ROW_WIDTH, self.RESULT_ROW_HEIGHT)
-    if previous then
-      row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, 0)
-    else
-      row:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
-    end
-    row:RegisterForClicks("LeftButtonUp")
-    row:SetScript("OnClick", function(button)
-      addon:HandleResultClick(button.resultIndex)
-    end)
-    row:SetScript("OnEnter", function(button)
-      addon:ShowResultTooltip(button.resultIndex, button)
-    end)
-    row:SetScript("OnLeave", function()
-      if GameTooltip then
-        GameTooltip:Hide()
-      end
-    end)
-    row.selectedTexture = row:CreateTexture(nil, "BACKGROUND")
-    row.selectedTexture:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-    if row.selectedTexture.SetAllPoints then
-      row.selectedTexture:SetAllPoints(row)
-    end
-    row.dividerTexture = row:CreateTexture(nil, "ARTWORK")
-    row.dividerTexture:SetTexture("Interface\\Buttons\\WHITE8X8")
-    if row.dividerTexture.SetVertexColor then
-      row.dividerTexture:SetVertexColor(1, 1, 1, 0.18)
-    end
-    row.dividerTexture:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-    row.dividerTexture:SetSize(self.RESULT_ROW_WIDTH, 1)
-    row.selectedTexture:Hide()
-    row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
-    row.nameText:SetWidth(self.RESULT_NAME_WIDTH)
-    row.deltaText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.deltaText:SetPoint("LEFT", row, "LEFT", self.RESULT_DELTA_OFFSET, 0)
-    row.deltaText:SetWidth(58)
-    if row.deltaText.SetJustifyH then
-      row.deltaText:SetJustifyH("RIGHT")
-    end
-    row.bidText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.bidText:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_PRICE_OFFSET, 0)
-    row.bidText:SetWidth(82)
-    row.buyoutText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    row.buyoutText:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_PRICE_OFFSET, 0)
-    row.buyoutText:SetWidth(92)
-    row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.bidButton:Hide()
-    row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.buyoutButton:Hide()
-    row:Hide()
-    rows[index] = row
-    previous = row
+function addon:CreateResultRow(parent, scrollFrame, index, previous)
+  local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
+  row:SetSize(self.RESULT_ROW_WIDTH, self.RESULT_ROW_HEIGHT)
+  if previous then
+    row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, 0)
+  else
+    row:SetPoint("TOPLEFT", scrollFrame, "TOPLEFT", 0, 0)
   end
+  row:RegisterForClicks("LeftButtonUp")
+  row:SetScript("OnClick", function(button)
+    addon:HandleResultClick(button.resultIndex)
+  end)
+  row:SetScript("OnEnter", function(button)
+    addon:ShowResultTooltip(button.resultIndex, button)
+  end)
+  row:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+  row.selectedTexture = row:CreateTexture(nil, "BACKGROUND")
+  row.selectedTexture:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+  if row.selectedTexture.SetAllPoints then
+    row.selectedTexture:SetAllPoints(row)
+  end
+  row.dividerTexture = row:CreateTexture(nil, "ARTWORK")
+  row.dividerTexture:SetTexture("Interface\\Buttons\\WHITE8X8")
+  if row.dividerTexture.SetVertexColor then
+    row.dividerTexture:SetVertexColor(1, 1, 1, 0.18)
+  end
+  row.dividerTexture:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+  row.dividerTexture:SetSize(self.RESULT_ROW_WIDTH, 1)
+  row.selectedTexture:Hide()
+  row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
+  row.nameText:SetWidth(self.RESULT_NAME_WIDTH)
+  row.deltaText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  row.deltaText:SetPoint("LEFT", row, "LEFT", self.RESULT_DELTA_OFFSET, 0)
+  row.deltaText:SetWidth(58)
+  if row.deltaText.SetJustifyH then
+    row.deltaText:SetJustifyH("RIGHT")
+  end
+  row.bidText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  row.bidText:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_PRICE_OFFSET, 0)
+  row.bidText:SetWidth(82)
+  row.buyoutText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  row.buyoutText:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_PRICE_OFFSET, 0)
+  row.buyoutText:SetWidth(92)
+  row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+  row.bidButton:Hide()
+  row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+  row.buyoutButton:Hide()
+  row:Hide()
+  return row
+end
 
+function addon:CreateResultActions(parent)
   local closeAction = CreateFrame(
     "Button",
     "PawnAuctionSearchCloseActionButton",
@@ -1562,7 +1601,6 @@ function addon:CreateResults(parent)
     "UIPanelButtonTemplate"
   )
   closeAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
-
   local buyoutAction = CreateFrame(
     "Button",
     "PawnAuctionSearchBuyoutActionButton",
@@ -1570,7 +1608,6 @@ function addon:CreateResults(parent)
     "UIPanelButtonTemplate"
   )
   buyoutAction:SetSize(self.ACTION_BUTTON_WIDTH, self.ACTION_BUTTON_HEIGHT)
-
   local bidAction = CreateFrame(
     "Button",
     "PawnAuctionSearchBidActionButton",
@@ -1611,6 +1648,21 @@ function addon:CreateResults(parent)
   bidAction:Disable()
   parent.bidButton = bidAction
   self.bidButton = bidAction
+end
+
+function addon:CreateResults(parent)
+  if self.resultRows then
+    return self.resultRows
+  end
+  local rows = {}
+  local scrollFrame = self:CreateResultsHeaderAndScroll(parent)
+  local previous
+  for index = 1, self.RESULTS_VISIBLE_ROWS do
+    local row = self:CreateResultRow(parent, scrollFrame, index, previous)
+    rows[index] = row
+    previous = row
+  end
+  self:CreateResultActions(parent)
   return rows
 end
 

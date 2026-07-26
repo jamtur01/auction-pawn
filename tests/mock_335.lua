@@ -11,6 +11,7 @@ mock.events = {}
 mock.auctions = {}
 mock.cvars = {}
 mock.money = 1000000
+mock.scales = {}
 
 local Frame = {}
 Frame.__index = Frame
@@ -349,6 +350,7 @@ end
 
 function UIDropDownMenu_Initialize(frame, initialize)
   frame.initialize = initialize
+  mock.dropdownButtons = {}
   if initialize then
     initialize(frame)
   end
@@ -382,8 +384,17 @@ function UIDropDownMenu_SetWidth(frame, width)
   frame.width = width
 end
 
+function ToggleDropDownMenu(level, value, frame)
+  mock.dropdownVisible = true
+  mock.reopenedDropdown = frame
+  if frame and frame.initialize then
+    UIDropDownMenu_Initialize(frame, frame.initialize)
+  end
+end
+
 function CloseDropDownMenus()
   mock.dropdownsClosed = true
+  mock.dropdownVisible = false
 end
 
 function MoneyInputFrame_SetCopper(frame, amount)
@@ -645,6 +656,9 @@ function PawnIsInitialized()
 end
 
 function PawnGetAllScalesEx()
+  if mock.scales[1] then
+    return mock.scales
+  end
   return {
     {
       Name = "TestScale",
@@ -655,7 +669,15 @@ function PawnGetAllScalesEx()
 end
 
 function PawnDoesScaleExist(scaleName)
-  return scaleName == "TestScale"
+  if scaleName == "TestScale" then
+    return true
+  end
+  for _, scale in ipairs(mock.scales) do
+    if scale.Name == scaleName then
+      return true
+    end
+  end
+  return false
 end
 
 function PawnGetItemData(item)
@@ -706,7 +728,10 @@ function mock.reset()
   wipe_table(mock.frames)
   mock.dropdownButtons = {}
   mock.chatMessages = {}
+  mock.scales = {}
   mock.dropdownsClosed = false
+  mock.dropdownVisible = false
+  mock.reopenedDropdown = nil
   mock.lastAuctionQuery = nil
   mock.currentPage = 0
   mock.canQuery = true
