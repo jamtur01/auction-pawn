@@ -6,7 +6,7 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 130
 addon.ARMOR_DROPDOWN_WIDTH = 130
-addon.LEFT_CONTROLS_TOP_OFFSET = -29
+addon.LEFT_CONTROLS_TOP_OFFSET = -32
 addon.SLOT_FILTER_COLUMN_WIDTH = 150
 addon.RESULTS_LEFT_OFFSET = 260
 addon.RESULTS_STATUS_OFFSET = -200
@@ -20,7 +20,7 @@ addon.RESULT_BUYOUT_PRICE_OFFSET = 340
 addon.ACTION_BUTTON_WIDTH = 80
 addon.ACTION_BUTTON_HEIGHT = 22
 addon.RESULTS_VISIBLE_ROWS = 4
-addon.RESULT_ROW_HEIGHT = 22
+addon.RESULT_ROW_HEIGHT = 21
 addon.OPTION_FILTER_ROWS = 6
 addon.SLOT_FILTERS_TOP_OFFSET = -32
 addon.OPTION_FILTER_COLUMN_WIDTH = 165
@@ -313,6 +313,16 @@ function addon:AttachHelpTooltip(frame, title, text)
   end)
 end
 
+function addon:AttachDropdownHelpTooltip(dropdown, title, text)
+  self:AttachHelpTooltip(dropdown, title, text)
+  if not dropdown or not dropdown.GetName then
+    return
+  end
+  local name = dropdown:GetName()
+  local button = name and _G[name .. "Button"]
+  self:AttachHelpTooltip(button, title, text)
+end
+
 function addon:RestoreAuctionFrameChrome()
   if AuctionFrameMoneyFrame then
     AuctionFrameMoneyFrame:Show()
@@ -591,7 +601,7 @@ function addon:CreateScaleSelector(parent)
       end
     end)
   end
-  self:AttachHelpTooltip(
+  self:AttachDropdownHelpTooltip(
     dropdown,
     "Pawn scale",
     "The Pawn scale that will be used to determine the item value"
@@ -1204,7 +1214,7 @@ function addon:CreateArmorPreferenceSelector(parent, anchor)
   if UIDropDownMenu_SetText then
     UIDropDownMenu_SetText(dropdown, self:GetArmorPreferenceLabel())
   end
-  self:AttachHelpTooltip(
+  self:AttachDropdownHelpTooltip(
     dropdown,
     "Armor Preference",
     "Only show the selected armor type in search results.  Filter out all other armor types."

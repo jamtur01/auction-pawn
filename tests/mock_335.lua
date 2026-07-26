@@ -271,6 +271,9 @@ function mock.create_frame(frameType, name, parent, template)
     if template == "UICheckButtonTemplate" then
       _G[name .. "Text"] = mock.create_frame("FontString", name .. "Text", frame)
     end
+    if template == "UIDropDownMenuTemplate" then
+      _G[name .. "Button"] = mock.create_frame("Button", name .. "Button", frame)
+    end
   end
   return frame
 end

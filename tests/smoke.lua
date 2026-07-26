@@ -237,6 +237,12 @@ assert_equals(
   #PawnAuctionSearch.slotFilters,
   "slot control count"
 )
+PawnAuctionSearchScaleDropDownButton.scripts.OnEnter(PawnAuctionSearchScaleDropDownButton)
+assert_equals(GameTooltip.lines[1], "Pawn scale", "scale dropdown button shows help")
+PawnAuctionSearchArmorPreferenceDropDownButton.scripts.OnEnter(
+  PawnAuctionSearchArmorPreferenceDropDownButton
+)
+assert_equals(GameTooltip.lines[1], "Armor Preference", "armor dropdown button shows help")
 assert_equals(
   PawnAuctionSearch.resultRows[1].width,
   PawnAuctionSearch.RESULT_ROW_WIDTH,
