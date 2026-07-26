@@ -535,6 +535,9 @@ function addon:GetComparisonSlots(row)
     if not self:CanDualWield() then
       return nil
     end
+    if hasTwoHandEquipped and not hasTitanGrip then
+      return nil
+    end
     return singleSlot("SecondaryHandSlot"), "single"
   end
 

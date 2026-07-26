@@ -219,4 +219,32 @@ PawnAuctionSearch:OnUpdate(0.1)
 assert_equals(mock.lastAuctionQuery[7], 0, "throttled scan retry page")
 
 
+mock.mainHandItemId = 9002
+mock.knownSpells = { [674] = true, [23588] = false, [46917] = false }
+local offhandCandidate = {
+  index = 1,
+  page = 0,
+  name = "Offhand Dagger",
+  link = "|cff1eff00|Hitem:1003:0:0:0:0:0:0:0|h[Offhand Dagger]|h|r",
+  count = 1,
+  quality = 2,
+  canUse = true,
+  level = 80,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+  equipLoc = "INVTYPE_WEAPONOFFHAND",
+}
+assert_equals(
+  PawnAuctionSearch:ScoreAuction(offhandCandidate, "TestScale"),
+  nil,
+  "offhand weapon excluded with 2H equipped and no Titan Grip"
+)
+mock.knownSpells[46917] = true
+assert_truthy(
+  PawnAuctionSearch:ScoreAuction(offhandCandidate, "TestScale"),
+  "offhand weapon allowed with Titan Grip"
+)
+
 print("smoke ok")

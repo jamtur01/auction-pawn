@@ -417,9 +417,17 @@ function GetInventorySlotInfo(slotName)
   return 0, nil
 end
 
+local function inventory_link(itemId, name)
+  return "|cff1eff00|Hitem:" .. itemId .. ":0:0:0:0:0:0:0|h[" .. name .. "]|h|r"
+end
+
 function GetInventoryItemLink(unit, slotId)
   if unit == "player" and slotId == 16 then
-    return "|cff1eff00|Hitem:9001:0:0:0:0:0:0:0|h[Equipped Sword]|h|r"
+    local itemId = mock.mainHandItemId or 9001
+    return inventory_link(itemId, itemId == 9002 and "Equipped Axe" or "Equipped Sword")
+  end
+  if unit == "player" and slotId == 17 and mock.offHandItemId then
+    return inventory_link(mock.offHandItemId, "Equipped Offhand")
   end
   return nil
 end
@@ -433,7 +441,7 @@ function GetSpellInfo(spell)
 end
 
 function IsSpellKnown(spell)
-  return false
+  return mock.knownSpells and mock.knownSpells[spell] or false
 end
 
 function tContains(t, item)
@@ -527,17 +535,19 @@ end
 
 function GetItemInfo(item)
   local itemId = tostring(item):match("item:(%d+)") or tostring(item)
-  local names = {
-    ["1001"] = "Upgrade Sword",
-    ["1002"] = "Downgrade Sword",
-    ["9001"] = "Equipped Sword",
+  local items = {
+    ["1001"] = { "Upgrade Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
+    ["1002"] = { "Downgrade Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
+    ["1003"] = { "Offhand Dagger", "Weapon", "Dagger", "INVTYPE_WEAPONOFFHAND" },
+    ["9001"] = { "Equipped Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
+    ["9002"] = { "Equipped Axe", "Weapon", "Two-Handed Axe", "INVTYPE_2HWEAPON" },
   }
-  local name = names[itemId]
-  if not name then
+  local info = items[itemId]
+  if not info then
     return nil
   end
-  return name, auction_link(itemId, name), 2, 80, 80, "Weapon", "Sword", 1,
-    "INVTYPE_WEAPON", nil, 10000
+  return info[1], auction_link(itemId, info[1]), 2, 80, 80, info[2], info[3], 1,
+    info[4], nil, 10000
 end
 
 function PawnIsInitialized()
@@ -580,7 +590,9 @@ function PawnGetSingleValueFromItem(item, scaleName)
   local values = {
     ["1001"] = 120,
     ["1002"] = 80,
+    ["1003"] = 300,
     ["9001"] = 100,
+    ["9002"] = 200,
   }
   return values[itemId] or 0
 end
@@ -605,6 +617,9 @@ function mock.reset()
   mock.lastAuctionQuery = nil
   mock.currentPage = 0
   mock.canQuery = true
+  mock.mainHandItemId = 9001
+  mock.offHandItemId = nil
+  mock.knownSpells = {}
   mock.placedBid = nil
   mock.selectedAuctionList = nil
   _G.selectedAuction = nil
