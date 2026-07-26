@@ -414,6 +414,9 @@ function GetInventorySlotInfo(slotName)
   if slotName == "SecondaryHandSlot" then
     return 17, nil
   end
+  if slotName == "ChestSlot" then
+    return 5, nil
+  end
   return 0, nil
 end
 
@@ -428,6 +431,9 @@ function GetInventoryItemLink(unit, slotId)
   end
   if unit == "player" and slotId == 17 and mock.offHandItemId then
     return inventory_link(mock.offHandItemId, "Equipped Offhand")
+  end
+  if unit == "player" and slotId == 5 then
+    return inventory_link(9003, "Equipped Chest")
   end
   return nil
 end
@@ -514,7 +520,7 @@ function GetAuctionItemInfo(listType, index)
   if not row then
     return nil
   end
-  return row.name, nil, 1, row.quality, true, row.level, row.minBid,
+  return row.name, nil, 1, row.quality, row.canUse ~= false, row.level, row.minBid,
     row.minIncrement, row.buyoutPrice, row.bidAmount, nil, row.owner
 end
 
@@ -538,6 +544,7 @@ end
 
 function PlaceAuctionBid(listType, index, bid)
   mock.placedBid = {listType = listType, index = index, bid = bid}
+
 end
 
 function GetItemInfo(item)
@@ -546,8 +553,11 @@ function GetItemInfo(item)
     ["1001"] = { "Upgrade Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
     ["1002"] = { "Downgrade Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
     ["1003"] = { "Offhand Dagger", "Weapon", "Dagger", "INVTYPE_WEAPONOFFHAND" },
+    ["1004"] = { "Plate Upgrade", "Armor", "Plate", "INVTYPE_CHEST" },
+    ["1005"] = { "Cloth Upgrade", "Armor", "Cloth", "INVTYPE_CHEST" },
     ["9001"] = { "Equipped Sword", "Weapon", "Sword", "INVTYPE_WEAPON" },
     ["9002"] = { "Equipped Axe", "Weapon", "Two-Handed Axe", "INVTYPE_2HWEAPON" },
+    ["9003"] = { "Equipped Chest", "Armor", "Plate", "INVTYPE_CHEST" },
   }
   local info = items[itemId]
   if not info then
@@ -598,8 +608,11 @@ function PawnGetSingleValueFromItem(item, scaleName)
     ["1001"] = 120,
     ["1002"] = 80,
     ["1003"] = 300,
+    ["1004"] = 150,
+    ["1005"] = 160,
     ["9001"] = 100,
     ["9002"] = 200,
+    ["9003"] = 100,
   }
   return values[itemId] or 0
 end
@@ -627,6 +640,7 @@ function mock.reset()
   mock.canQueryAll = false
   mock.fastScan = false
   mock.forcePagedListUpdate = false
+  mock.placedBid = nil
   mock.mainHandItemId = 9001
   mock.offHandItemId = nil
   mock.knownSpells = {}

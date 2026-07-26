@@ -53,6 +53,15 @@ local function find_slot_control(addon, label)
   fail("slot control missing: " .. label)
 end
 
+local function find_option_control(addon, label)
+  for _, control in ipairs(addon.optionControls or {}) do
+    if control.labelText and control.labelText:GetText() == label then
+      return control
+    end
+  end
+  fail("option control missing: " .. label)
+end
+
 
 local function discover_scales(addon)
   if addon.DiscoverScales then
@@ -136,6 +145,15 @@ assert_equals(PawnAuctionSearch.mainFrame:IsShown(), false, "Pawn frame hidden o
 
 
 local scales = discover_scales(PawnAuctionSearch)
+assert_equals(#PawnAuctionSearch.optionControls, 6, "option control count")
+assert_equals(PawnAuctionSearchDB.useBuyout, false, "use buyout defaults off")
+local buyoutControl = find_option_control(PawnAuctionSearch, "Use buyout")
+buyoutControl:SetChecked(true)
+buyoutControl.scripts.OnClick(buyoutControl)
+assert_equals(PawnAuctionSearchDB.useBuyout, true, "use buyout option persists")
+buyoutControl:SetChecked(false)
+buyoutControl.scripts.OnClick(buyoutControl)
+assert_equals(PawnAuctionSearchDB.useBuyout, false, "use bid option persists")
 assert_equals(count_values(scales), 1, "scale count")
 assert_equals(first_value(scales), "TestScale", "scale name")
 assert_equals(
@@ -190,6 +208,53 @@ assert_truthy(results, "scan results exist")
 assert_equals(#results, 1, "upgrade result count")
 assert_equals(result_name(results[1]), "Upgrade Sword", "upgrade result name")
 assert_equals(result_delta(results[1]), 20, "upgrade result delta")
+assert_equals(PawnAuctionSearch.resultRows[1].deltaText.text, "+20.00", "pawn score formatted")
+assert_equals(PawnAuctionSearch.resultRows[1].priceText.text, "1g 0s 0c", "bid price shown by default")
+PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
+assert_equals(mock.placedBid.index, 1, "bid button uses selected row")
+assert_equals(mock.placedBid.bid, 10000, "bid button uses bid price")
+mock.placedBid = nil
+PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].buyoutButton)
+assert_equals(mock.placedBid.bid, 20000, "buyout button uses buyout price")
+mock.placedBid = nil
+mock.auctions[1].buyoutPrice = 30000
+PawnAuctionSearch.resultRows[1].buyoutButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].buyoutButton)
+assert_equals(mock.placedBid, nil, "changed auction row blocks buyout")
+mock.auctions[1].buyoutPrice = 20000
+PawnAuctionSearchDB.canUse = true
+results[1].canUse = false
+assert_equals(PawnAuctionSearch:ScoreAuction(results[1], "TestScale"), nil, "can-use filter excludes unusable")
+results[1].canUse = true
+PawnAuctionSearchDB.canUse = false
+PawnAuctionSearchDB.force2h = true
+assert_equals(PawnAuctionSearch:ScoreAuction(results[1], "TestScale"), nil, "force 2h excludes one-hand")
+PawnAuctionSearchDB.force2h = false
+local plateRow = {
+  link = "|cff1eff00|Hitem:1004:0:0:0:0:0:0:0|h[Plate Upgrade]|h|r",
+  equipLoc = "INVTYPE_CHEST",
+  itemType = "Armor",
+  itemSubType = "Plate",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+local clothRow = {
+  link = "|cff1eff00|Hitem:1005:0:0:0:0:0:0:0|h[Cloth Upgrade]|h|r",
+  equipLoc = "INVTYPE_CHEST",
+  itemType = "Armor",
+  itemSubType = "Cloth",
+  canUse = true,
+  minBid = 10000,
+  minIncrement = 100,
+  buyoutPrice = 20000,
+  bidAmount = 0,
+}
+PawnAuctionSearchDB.armorPreference = "Plate"
+assert_truthy(PawnAuctionSearch:ScoreAuction(plateRow, "TestScale"), "armor preference keeps plate")
+assert_equals(PawnAuctionSearch:ScoreAuction(clothRow, "TestScale"), nil, "armor preference excludes cloth")
+PawnAuctionSearchDB.armorPreference = ""
 
 PawnAuctionSearch:SelectResult(1)
 assert_equals(_G.selectedAuction, 1, "selected auction index")
@@ -277,11 +342,18 @@ assert_equals(#PawnAuctionSearch.auctionCacheRows, 51, "fast scan cache count")
 assert_equals(get_results(PawnAuctionSearch)[1].page, 1, "fast scan result fallback page")
 assert_equals(get_results(PawnAuctionSearch)[1].index, 1, "fast scan result fallback index")
 _G.selectedAuction = nil
-PawnAuctionSearch:SelectResult(1)
-assert_equals(mock.lastAuctionQuery[7], 1, "fast scan selection page requery")
-assert_equals(_G.selectedAuction, nil, "fast scan selection waits for requery")
+mock.placedBid = nil
+mock.lastAuctionQuery = nil
+PawnAuctionSearch.currentAuctionPage = 0
+PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
+assert_equals(mock.lastAuctionQuery[7], 1, "fast scan bid loads result page")
+assert_equals(mock.placedBid, nil, "fast scan bid waits for explicit second click")
 fire_auction_update(PawnAuctionSearch)
-assert_equals(_G.selectedAuction, 1, "fast scan page-local auction selected")
+assert_equals(_G.selectedAuction, 1, "fast scan bid page load selects auction")
+assert_equals(mock.placedBid, nil, "fast scan page load does not bid")
+PawnAuctionSearch.resultRows[1].bidButton.scripts.OnClick(PawnAuctionSearch.resultRows[1].bidButton)
+assert_equals(mock.placedBid.index, 1, "fast scan bid second click uses page-local index")
+assert_equals(mock.placedBid.bid, 10000, "fast scan bid second click spends bid price")
 
 mock.canQueryAll = true
 mock.lastAuctionQuery = nil

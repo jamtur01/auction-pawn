@@ -6,10 +6,13 @@ addon.TAB_LABEL = "Pawn"
 addon.AUCTIONS_PER_PAGE = 50
 addon.SCALE_DROPDOWN_WIDTH = 200
 addon.SLOT_FILTER_COLUMN_WIDTH = 92
-addon.RESULTS_LEFT_OFFSET = 300
-addon.RESULT_ROW_WIDTH = 390
+addon.RESULTS_LEFT_OFFSET = 230
+addon.RESULT_ROW_WIDTH = 520
+addon.RESULT_NAME_WIDTH = 200
 addon.RESULT_DELTA_OFFSET = 210
-addon.RESULT_PRICE_OFFSET = 290
+addon.RESULT_PRICE_OFFSET = 280
+addon.RESULT_BID_OFFSET = 420
+addon.RESULT_BUYOUT_OFFSET = 470
 addon.FAST_SCAN_ROWS_PER_TICK = 250
 addon.FAST_SCAN_STATUS_INTERVAL = 1000
 
@@ -37,7 +40,7 @@ addon.defaults = {
   scaleName = "",
   canUse = false,
   affordable = false,
-  useBuyout = true,
+  useBuyout = false,
   bestPrice = false,
   unenchanted = false,
   force2h = false,
@@ -473,14 +476,25 @@ function addon:GetSlotsForEquipLoc(equipLoc)
   return slots
 end
 
-function addon:GetPrice(row)
-  if self.db and self.db.useBuyout and row.buyoutPrice and row.buyoutPrice > 0 then
-    return row.buyoutPrice
+function addon:GetBidPrice(row)
+  if not row then
+    return 0
   end
   if row.bidAmount and row.bidAmount > 0 then
     return row.bidAmount + (row.minIncrement or 0)
   end
   return row.minBid or 0
+end
+
+function addon:GetBuyoutPrice(row)
+  return row and row.buyoutPrice or 0
+end
+
+function addon:GetPrice(row)
+  if self.db and self.db.useBuyout and self:GetBuyoutPrice(row) > 0 then
+    return self:GetBuyoutPrice(row)
+  end
+  return self:GetBidPrice(row)
 end
 
 function addon:GetPawnValueForLink(link, scaleName)
@@ -518,6 +532,27 @@ function addon:IsAffordable(row)
     return false
   end
   return self:GetPrice(row) <= GetMoney()
+end
+
+function addon:MatchesForceTwoHand(row)
+  if not self.db or not self.db.force2h then
+    return true
+  end
+  if row.itemType ~= "Weapon" then
+    return true
+  end
+  return row.equipLoc == "INVTYPE_2HWEAPON"
+end
+
+function addon:MatchesArmorPreference(row)
+  local preference = self.db and self.db.armorPreference or ""
+  if preference == "" or row.itemType ~= "Armor" then
+    return true
+  end
+  if row.itemSubType == "Miscellaneous" or row.itemSubType == "Shields" then
+    return true
+  end
+  return row.itemSubType == preference
 end
 
 function addon:IsSlotEnabled(slotName)
@@ -682,6 +717,12 @@ function addon:ScoreAuction(row, scaleName)
   if self.db and self.db.affordable and not self:IsAffordable(row) then
     return nil
   end
+  if not self:MatchesForceTwoHand(row) then
+    return nil
+  end
+  if not self:MatchesArmorPreference(row) then
+    return nil
+  end
 
   local slots, mode = self:GetComparisonSlots(row)
   if not slots then
@@ -729,6 +770,10 @@ local function formatCopper(copper)
   return copperOnly .. "c"
 end
 
+local function formatScore(score)
+  return string.format("+%.2f", score or 0)
+end
+
 local function sortByScore(left, right)
   return (left.score or 0) > (right.score or 0)
 end
@@ -755,6 +800,104 @@ function addon:SelectAuctionTab(index)
   self.mainFrame:Show()
   AuctionFrame.type = "list"
 end
+function addon:SetOption(key, enabled)
+  self.db = self:EnsureDatabase()
+  self.db[key] = enabled and true or false
+end
+
+function addon:SetArmorPreference(value)
+  self.db = self:EnsureDatabase()
+  self.db.armorPreference = value or ""
+  if self.armorDropDown and UIDropDownMenu_SetText then
+    UIDropDownMenu_SetText(self.armorDropDown, self:GetArmorPreferenceLabel())
+  end
+end
+
+function addon:GetArmorPreferenceLabel()
+  local preference = self.db and self.db.armorPreference or ""
+  if preference == "" then
+    return "No Preference"
+  end
+  return preference
+end
+
+local function addOptionCheckButton(addon, parent, key, label, index, anchor)
+  local check = CreateFrame("CheckButton", "PawnAuctionSearchOption" .. index, parent, "UICheckButtonTemplate")
+  check:SetSize(20, 20)
+  check:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4 - ((index - 1) * 20))
+  check:SetChecked(addon.db and addon.db[key])
+  check.labelText = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  check.labelText:SetPoint("LEFT", check, "RIGHT", 2, 0)
+  check.labelText:SetText(label)
+  check:SetScript("OnClick", function(button)
+    addon:SetOption(key, button:GetChecked())
+  end)
+  parent.optionControls[index] = check
+  return check
+end
+
+function addon:CreateArmorPreferenceSelector(parent, anchor)
+  local label = parent:CreateFontString("PawnAuctionSearchArmorPreferenceLabel", "ARTWORK", "GameFontNormal")
+  label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
+  label:SetText("Armor Preference")
+
+  local dropdown = CreateFrame(
+    "Frame",
+    "PawnAuctionSearchArmorPreferenceDropDown",
+    parent,
+    "UIDropDownMenuTemplate"
+  )
+  dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", -16, -4)
+  self.armorDropDown = dropdown
+  if UIDropDownMenu_SetWidth then
+    UIDropDownMenu_SetWidth(dropdown, 160)
+  end
+  if UIDropDownMenu_Initialize then
+    UIDropDownMenu_Initialize(dropdown, function()
+      local options = { "", "Cloth", "Leather", "Mail", "Plate" }
+      for _, option in ipairs(options) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = option == "" and "No Preference" or option
+        info.value = option
+        info.func = function()
+          addon:SetArmorPreference(option)
+        end
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
+  end
+  if UIDropDownMenu_SetText then
+    UIDropDownMenu_SetText(dropdown, self:GetArmorPreferenceLabel())
+  end
+  return dropdown
+end
+
+function addon:CreateOptionControls(parent, anchor)
+  if parent.optionControls then
+    return parent.optionControls
+  end
+  self.db = self:EnsureDatabase()
+  local title = parent:CreateFontString("PawnAuctionSearchOptionsTitle", "ARTWORK", "GameFontNormal")
+  title:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
+  title:SetText("Options")
+  parent.optionControls = {}
+  local options = {
+    { key = "canUse", label = "Useable items only" },
+    { key = "affordable", label = "Only what I can afford" },
+    { key = "useBuyout", label = "Use buyout" },
+    { key = "bestPrice", label = "Adjust score based on price" },
+    { key = "unenchanted", label = "Use unenchanted values" },
+    { key = "force2h", label = "Only 2H Weapons" },
+  }
+  local last = title
+  for index, option in ipairs(options) do
+    last = addOptionCheckButton(self, parent, option.key, option.label, index, title)
+  end
+  parent.optionsBottom = self:CreateArmorPreferenceSelector(parent, last)
+  self.optionControls = parent.optionControls
+  return parent.optionControls
+end
+
 
 local function addSlotFilterCheckButton(addon, parent, filter, index, title)
   local column = math.floor((index - 1) / 9)
@@ -827,7 +970,8 @@ function addon:CreateMainFrame()
   end)
   frame.searchButton = button
 
-  self:CreateSlotFilters(frame, button)
+  self:CreateOptionControls(frame, button)
+  self:CreateSlotFilters(frame, frame.optionsBottom or button)
   self.resultRows = self:CreateResults(frame)
   self.mainFrame = frame
   return frame
@@ -838,6 +982,19 @@ function addon:CreateResults(parent)
     return self.resultRows
   end
   local rows = {}
+  local header = parent:CreateFontString("PawnAuctionSearchResultsHeader", "ARTWORK", "GameFontNormal")
+  header:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -14)
+  header:SetText("Item")
+  parent.resultsHeader = header
+
+  local scoreHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  scoreHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_DELTA_OFFSET, 0)
+  scoreHeader:SetText("Pawn")
+
+  local priceHeader = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  priceHeader:SetPoint("LEFT", header, "LEFT", self.RESULT_PRICE_OFFSET, 0)
+  priceHeader:SetText("Price")
+
   local previous
   for index = 1, 10 do
     local row = CreateFrame("Button", "PawnAuctionSearchResult" .. index, parent)
@@ -845,7 +1002,7 @@ function addon:CreateResults(parent)
     if previous then
       row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
     else
-      row:SetPoint("TOPLEFT", parent, "TOPLEFT", self.RESULTS_LEFT_OFFSET, -32)
+      row:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8)
     end
     row:RegisterForClicks("LeftButtonUp")
     row:SetScript("OnClick", function()
@@ -853,10 +1010,30 @@ function addon:CreateResults(parent)
     end)
     row.nameText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.nameText:SetPoint("LEFT", row, "LEFT", 0, 0)
+    row.nameText:SetWidth(self.RESULT_NAME_WIDTH)
     row.deltaText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.deltaText:SetPoint("LEFT", row, "LEFT", self.RESULT_DELTA_OFFSET, 0)
+    row.deltaText:SetWidth(58)
+    if row.deltaText.SetJustifyH then
+      row.deltaText:SetJustifyH("RIGHT")
+    end
     row.priceText = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     row.priceText:SetPoint("LEFT", row, "LEFT", self.RESULT_PRICE_OFFSET, 0)
+    row.priceText:SetWidth(130)
+    row.bidButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.bidButton:SetSize(42, 18)
+    row.bidButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BID_OFFSET, 0)
+    row.bidButton:SetText("Bid")
+    row.bidButton:SetScript("OnClick", function()
+      addon:PlaceResultBid(index, false)
+    end)
+    row.buyoutButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.buyoutButton:SetSize(46, 18)
+    row.buyoutButton:SetPoint("LEFT", row, "LEFT", self.RESULT_BUYOUT_OFFSET, 0)
+    row.buyoutButton:SetText("Buy")
+    row.buyoutButton:SetScript("OnClick", function()
+      addon:PlaceResultBid(index, true)
+    end)
     row:Hide()
     rows[index] = row
     previous = row
@@ -1143,34 +1320,97 @@ function addon:UpdateResults()
     if result then
       row.resultIndex = index
       row.nameText:SetText(result.link or result.name or "")
-      row.deltaText:SetText(tostring(result.delta or 0))
-      local bid = result.bidAmount and result.bidAmount > 0 and result.bidAmount or result.minBid
-      row.priceText:SetText("Buyout " .. formatCopper(result.buyoutPrice)
-        .. " / Bid " .. formatCopper(bid))
+      row.deltaText:SetText(formatScore(result.score))
+      row.priceText:SetText(formatCopper(self:GetPrice(result)))
+      row.bidButton:Show()
+      row.buyoutButton:Show()
       row:Show()
     else
       row.resultIndex = nil
       row.nameText:SetText("")
       row.deltaText:SetText("")
       row.priceText:SetText("")
+      row.bidButton:Hide()
+      row.buyoutButton:Hide()
       row:Hide()
     end
   end
 end
 
-function addon:SelectCurrentBrowseResult(result)
+function addon:FindCurrentBrowseIndex(result)
   if GetAuctionItemLink("list", result.index) == result.link then
-    SetSelectedAuctionItem("list", result.index)
-    return true
+    return result.index
   end
   local count = GetNumAuctionItems("list") or 0
   for index = 1, count do
     if GetAuctionItemLink("list", index) == result.link then
-      SetSelectedAuctionItem("list", index)
-      return true
+      return index
     end
   end
-  return false
+  return nil
+end
+
+function addon:SelectCurrentBrowseResult(result)
+  local index = self:FindCurrentBrowseIndex(result)
+  if not index then
+    return false
+  end
+  SetSelectedAuctionItem("list", index)
+  return true
+end
+
+function addon:GetCurrentAuctionBid(index)
+  local _, _, _, _, _, _, minBid, minIncrement, buyoutPrice, bidAmount =
+    GetAuctionItemInfo("list", index)
+  local bid = bidAmount and bidAmount > 0 and bidAmount + (minIncrement or 0) or minBid
+  return bid or 0, buyoutPrice or 0
+end
+
+function addon:CurrentAuctionMatchesResult(index, result)
+  local name, _, _, _, _, _, minBid, minIncrement, buyoutPrice, bidAmount, _, owner =
+    GetAuctionItemInfo("list", index)
+  if not name or GetAuctionItemLink("list", index) ~= result.link then
+    return false
+  end
+  return (minBid or 0) == (result.minBid or 0)
+    and (minIncrement or 0) == (result.minIncrement or 0)
+    and (buyoutPrice or 0) == (result.buyoutPrice or 0)
+    and (bidAmount or 0) == (result.bidAmount or 0)
+    and owner == result.owner
+end
+
+function addon:PlaceResultBid(resultIndex, buyout)
+  local result = self.results and self.results[resultIndex]
+  if not result then
+    return
+  end
+  if result.page ~= self.currentAuctionPage then
+    self.pendingSelection = result
+    self:QueryAuctionPage(result.page, "Loading result page. Click Bid or Buy again after it loads.")
+    return
+  end
+  local index = result.index
+  if not self:CurrentAuctionMatchesResult(index, result) then
+    self:SetStatus("Auction result changed. Search again before bidding.")
+    return
+  end
+  SetSelectedAuctionItem("list", index)
+  local bidPrice, buyoutPrice = self:GetCurrentAuctionBid(index)
+  local price = buyout and buyoutPrice or bidPrice
+  if buyout and price <= 0 then
+    self:SetStatus("Selected auction has no buyout price.")
+    return
+  end
+  if price <= 0 then
+    self:SetStatus("Selected auction has no valid bid price.")
+    return
+  end
+  PlaceAuctionBid("list", index, price)
+  if buyout then
+    self:SetStatus("Buyout placed for " .. (result.name or "auction result") .. ".")
+  else
+    self:SetStatus("Bid placed for " .. (result.name or "auction result") .. ".")
+  end
 end
 
 function addon:CompletePendingSelection()
