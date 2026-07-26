@@ -258,6 +258,7 @@ UIDropDownMenu_Initialize(
   PawnAuctionSearch.scaleDropDown,
   PawnAuctionSearch.scaleDropDown.initialize
 )
+assert_equals(mock.dropdownButtons[1].info.value, "TestScale", "scale page resets after shrink")
 assert_equals(
   PawnAuctionSearch:GetDisplayScaleLabel("Rogue: assassination"),
   "Rogue: assass.",

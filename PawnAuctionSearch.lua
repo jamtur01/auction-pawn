@@ -628,6 +628,10 @@ end
 function addon:InitializeScaleDropdown()
   local scales = self:GetScales()
   local offset = self.scaleMenuOffset or 1
+  if offset < 1 or not scales[offset] then
+    offset = 1
+    self.scaleMenuOffset = offset
+  end
   local maxScaleButtons = self.SCALE_DROPDOWN_PAGE_SIZE
   if offset > 1 then
     maxScaleButtons = maxScaleButtons - 1
